@@ -25,7 +25,6 @@ Import SetMonadHoare
        ListNotations
        MonadNotation.
 
-
 (*********************************************************)
 (**                                                      *)
 (** Graph                                                *)
@@ -203,6 +202,10 @@ Notation "e1 ;; e2" := (bind e1 (fun _: unit => e2))
   (at level 61, right associativity) : monad_scope.
 
 End MonadNotation. *)
+
+Search continue.
+
+Import StateRelMonadOp.
     
 (**开始定义算法过程*)
 Definition body_prim {V E: Type} (pg: PreGraph V E): 
@@ -212,9 +215,8 @@ Definition body_prim {V E: Type} (pg: PreGraph V E):
       choice (test (Sets.equiv edges_candidates Sets.empty);;
               break s1)
              (test (~ edges_candidates == Sets.empty);;
-              e <- any_in_set set_of_edges_want_to_add s1 ;;
-              v <- any_in_set set_of_vertices_want_to_add s1 e;;
+              e <- any_in_set (set_of_the_edges_want_to_add pg s1) ;;
+              v <- any_in_set (set_of_the_vertices_want_to_add pg s1 e);;
               add_the_edge_and_the_vertex pg s1 e v;;
               continue tt).
-Abort.
 

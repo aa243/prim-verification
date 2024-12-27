@@ -30,6 +30,8 @@ End StateRelMonad.
 
 Import SetMonadOperator1.
 
+Module StateRelMonadOp.
+
 #[export] Instance state_rel_monad (Σ: Type): Monad (StateRelMonad.M Σ) :=
 { ret := StateRelMonad.ret Σ;
     bind := StateRelMonad.bind Σ }.
@@ -74,12 +76,16 @@ ret (by_break b).
 Definition Hoare {Σ A: Type} (P: Σ -> Prop) (c: StateRelMonad.M Σ A) (Q: A -> Σ -> Prop): Prop :=
   forall σ1 a σ2, P σ1 -> c σ1 a σ2 -> Q a σ2.
 
-  Theorem  Hoare_bind {Σ A B: Type}:
-  forall (P: Σ -> Prop) (f: StateRelMonad.M Σ A) (M: A -> Σ -> Prop)
-  (g: A -> StateRelMonad.M Σ B) (Q: B -> Σ -> Prop),
-  Hoare P f M ->
-  (forall a: A, Hoare (M a) (g a) Q) ->
-  Hoare P (bind f g) Q.
+End StateRelMonadOp.
+
+Import StateRelMonadOp.
+
+Theorem  Hoare_bind {Σ A B: Type}:
+forall (P: Σ -> Prop) (f: StateRelMonad.M Σ A) (M: A -> Σ -> Prop)
+(g: A -> StateRelMonad.M Σ B) (Q: B -> Σ -> Prop),
+Hoare P f M ->
+(forall a: A, Hoare (M a) (g a) Q) ->
+Hoare P (bind f g) Q.
 Proof.
   intros.
   unfold Hoare, bind; sets_unfold; simpl; unfold StateRelMonad.bind.
