@@ -43,6 +43,9 @@ fun s1 a s2 => s1 = s2.
 Definition test {Σ: Type} (P: Σ -> Prop): StateRelMonad.M Σ unit :=
 fun s1 _ s2 => P s1 /\ s1 = s2.
 
+Definition any_in_set {Σ A: Type} (P: A -> Prop): StateRelMonad.M Σ A :=
+  fun s1 a s2 => P a /\ s1 = s2.
+
 Definition repeat_break_f
             {Σ A B: Type}
             (body: A -> StateRelMonad.M Σ (ContinueOrBreak A B))
