@@ -5,15 +5,19 @@ Require Import Coq.Classes.Morphisms.
 Require Import Coq.Lists.List.
 Require Import Coq.Sorting.Permutation.
 Require Import PL.FixedPoint.
-Require Import PL.Monad.
 Import SetsNotation
-       KleeneFix Sets_CPO
-       Monad
-       MonadNotation.
+       KleeneFix Sets_CPO.
 Local Open Scope sets.
 Local Open Scope Z.
-Local Open Scope monad.
 
+Module Monad.
+
+Class Monad (M: Type -> Type): Type := {
+  bind: forall {A B: Type}, M A -> (A -> M B) -> M B;
+  ret: forall {A: Type}, A -> M A;
+}.
+
+End Monad.
 
 Module StateRelMonad.
 Definition M (Σ A: Type) : Type :=
@@ -26,13 +30,25 @@ Definition ret (Σ A: Type) (a0: A) : M Σ A :=
 Definition bind (Σ A B: Type) (f : M Σ A) (g : A -> M Σ B) : M Σ B :=
   fun s1 b s3 => exists s2 a, f s1 a s2 /\ g a s2 b s3.
 
-End StateRelMonad.
+(* Import SetMonadOperator1. *)
 
-Import SetMonadOperator1.
-
+Import Monad.
 #[export] Instance state_rel_monad (Σ: Type): Monad (StateRelMonad.M Σ) :=
 { ret := StateRelMonad.ret Σ;
     bind := StateRelMonad.bind Σ }.
+
+Notation "x <- c1 ;; c2" := (bind c1 (fun x => c2))
+  (at level 61, c1 at next level, right associativity).
+
+Notation " x : T <- c1 ;; c2" :=(bind c1 (fun x : T => c2))
+  (at level 61, c1 at next level, right associativity).
+
+Notation "' pat <- c1 ;; c2" :=
+  (bind c1 (fun x => match x with pat => c2 end))
+  (at level 61, pat pattern, c1 at next level, right associativity).
+
+Notation "e1 ;; e2" := (bind e1 (fun _: unit => e2))
+  (at level 61, right associativity).
 
 Definition choice {Σ A: Type} (f g: StateRelMonad.M Σ A): StateRelMonad.M Σ A :=
 f ∪ g.
@@ -45,6 +61,13 @@ fun s1 _ s2 => P s1 /\ s1 = s2.
 
 Definition any_in_set {Σ A: Type} (P: A -> Prop): StateRelMonad.M Σ A :=
   fun s1 a s2 => P a /\ s1 = s2.
+
+Inductive ContinueOrBreak (A B: Type): Type :=
+| by_continue (a: A)
+| by_break (b: B).
+
+Arguments by_continue {_} {_} (_).
+Arguments by_break {_} {_} (_).
 
 Definition repeat_break_f
             {Σ A B: Type}
@@ -234,3 +257,5 @@ Proof.
       * apply IHn.
       * apply Hoare_ret.
 Qed.
+
+End StateRelMonad.

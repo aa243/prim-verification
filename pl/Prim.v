@@ -4,7 +4,7 @@ Require Import Coq.Classes.RelationClasses.
 From SetsClass Require Import SetsClass.
 Import SetsNotation.
 Local Open Scope sets_scope.
-Require Import StateRelMonad.
+Require Import PL.StateRelMonad.
 Import Monad.MonadNotation.
 Require Import SetsClass.SetsClass.
 Require Import Coq.ZArith.ZArith.
@@ -13,18 +13,13 @@ Require Import Coq.Classes.Morphisms.
 Require Import Coq.Lists.List.
 Require Import Coq.Sorting.Permutation.
 Require Import PL.FixedPoint.
-Require Import PL.Monad.
-Local Open Scope monad.
 Import SetsNotation
-       KleeneFix Sets_CPO
-       Monad
-       MonadNotation.
-Import SetMonadHoare
+       KleeneFix Sets_CPO.
+(* Import SetMonadHoare
        SetMonadOperator0
        SetMonadOperator1
        ListNotations
-       MonadNotation.
-
+       MonadNotation. *)
 
 (*********************************************************)
 (**                                                      *)
@@ -184,36 +179,17 @@ Definition add_the_edge_and_the_vertex {V E: Type} (pg: PreGraph V E) (s: State 
     s2.(vertex_taken) = v :: s1.(vertex_taken) /\
     s2.(edge_taken) = e :: s1.(edge_taken).
 
-
-(* Module MonadNotation.
-
-Declare Scope monad_scope.
-Delimit Scope monad_scope with monad.
-Notation "x <- c1 ;; c2" := (bind c1 (fun x => c2))
-  (at level 61, c1 at next level, right associativity) : monad_scope.
-
-Notation " x : T <- c1 ;; c2" :=(bind c1 (fun x : T => c2))
-  (at level 61, c1 at next level, right associativity) : monad_scope.
-
-Notation "' pat <- c1 ;; c2" :=
-  (bind c1 (fun x => match x with pat => c2 end))
-  (at level 61, pat pattern, c1 at next level, right associativity) : monad_scope.
-
-Notation "e1 ;; e2" := (bind e1 (fun _: unit => e2))
-  (at level 61, right associativity) : monad_scope.
-
-End MonadNotation. *)
     
 (**开始定义算法过程*)
 Definition body_prim {V E: Type} (pg: PreGraph V E): 
                   StateRelMonad.M (State V E) (ContinueOrBreak unit (State V E)) :=
   fun s1 _ s2 => (**s1 是初始状态， s2 是返回后的状态*)
       edges_candidates <- set_of_the_edges_want_to_add pg s1;;
-      choice (test (Sets.equiv edges_candidates Sets.empty);;
+      choice (test (edges_candidates == Sets.empty);;
               break s1)
              (test (~ edges_candidates == Sets.empty);;
-              e <- any_in_set set_of_edges_want_to_add s1 ;;
-              v <- any_in_set set_of_vertices_want_to_add s1 e;;
+              e <- any_in_set (set_of_the_edges_want_to_add pg s1);;
+              v <- any_in_set (set_of_the_vertices_want_to_add pg s1 e);;
               add_the_edge_and_the_vertex pg s1 e v;;
               continue tt).
 Abort.
