@@ -178,11 +178,18 @@ Definition set_of_the_vertices_want_to_add {V E: Type} (pg: PreGraph V E) (s: St
   fun v =>  
   ((pg.(src) e = v /\ In (pg.(dst) e) s.(vertex_taken)) \/ (pg.(dst) e = v /\ In (pg.(src) e) s.(vertex_taken))).
 
-Definition add_the_edge_and_the_vertex {V E: Type} (pg: PreGraph V E) (s: State V E) (e: E) (v: V): StateRelMonad.M (State V E) unit :=
+Definition add_the_edge_and_the_vertex {V E: Type} (pg: PreGraph V E) (e: E) (v: V): StateRelMonad.M (State V E) unit :=
   fun s1 _ s2 => 
     s2.(vertex_taken) = v :: s1.(vertex_taken) /\
     s2.(edge_taken) = e :: s1.(edge_taken).
 
+Definition get_any_edge_in_edge_candidates {V E: Type} (pg: PreGraph V E): StateRelMonad.M (State V E) E :=
+  fun s1 e s2 => 
+    e ∈ set_of_the_edges_want_to_add pg s1 /\ s1 = s2.
+
+Definition get_any_vertex_in_vertex_candidates {V E: Type} (pg: PreGraph V E) (e: E): StateRelMonad.M (State V E) V :=
+  fun s1 v s2 => 
+    v ∈ set_of_the_vertices_want_to_add pg s1 e /\ s1 = s2.
 
 (* Module MonadNotation.
 
@@ -203,20 +210,18 @@ Notation "e1 ;; e2" := (bind e1 (fun _: unit => e2))
 
 End MonadNotation. *)
 
-Search continue.
-
 Import StateRelMonadOp.
     
 (**开始定义算法过程*)
 Definition body_prim {V E: Type} (pg: PreGraph V E): 
-                  StateRelMonad.M (State V E) (ContinueOrBreak unit (State V E)) :=
-  fun s1 _ s2 => (**s1 是初始状态， s2 是返回后的状态*)
-      edges_candidates <- set_of_the_edges_want_to_add pg s1;;
-      choice (test (Sets.equiv edges_candidates Sets.empty);;
-              break s1)
-             (test (~ edges_candidates == Sets.empty);;
-              e <- any_in_set (set_of_the_edges_want_to_add pg s1) ;;
-              v <- any_in_set (set_of_the_vertices_want_to_add pg s1 e);;
-              add_the_edge_and_the_vertex pg s1 e v;;
+                  StateRelMonad.M (State V E) (ContinueOrBreak unit unit) :=
+      (**s1 是初始状态， s2 是返回后的状态*)
+      (* edges_candidates <- (fun s1 tmp s2 => tmp = set_of_the_edges_want_to_add pg s1 /\ s1 = s2);; *)
+      choice (test (fun s1 => (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
+              break tt)
+             (test (fun s1 => ~ (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
+              e <- get_any_edge_in_edge_candidates pg;;
+              v <- get_any_vertex_in_vertex_candidates pg e;;
+              add_the_edge_and_the_vertex pg e v;;
               continue tt).
 
