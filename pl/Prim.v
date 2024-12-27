@@ -224,4 +224,3 @@ Definition body_prim {V E: Type} (pg: PreGraph V E):
               v <- get_any_vertex_in_vertex_candidates pg e;;
               add_the_edge_and_the_vertex pg e v;;
               continue tt).
-
