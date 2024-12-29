@@ -118,9 +118,13 @@ Definition constuct_graph_by_list {V E: Type} (vl: list V) (el: list E) (src: E 
 Definition graph_connected {V E: Type} (t: PreGraph V E): Prop := 
   forall x y, t.(vvalid) x -> t.(vvalid) y -> connected t x y.
 
+Definition is_legal_graph_by_list {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
+  is_legal_graph (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight)) /\ Nodup vl /\ Nodup el.
+
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
-   length el + 1 = length vl /\ is_legal_graph (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight))
-   /\ graph_connected (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight)).
+   length el + 1 = length vl /\ 
+   is_legal_graph_by_list pg vl el /\
+   graph_connected (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight)).
 
 Definition get_sum {V E: Type} (pg: PreGraph V E) (l: list E): Z :=
   fold_right Z.add 0%Z (map pg.(weight) l).
@@ -214,13 +218,28 @@ Import StateRelMonadOp.
     
 (**开始定义算法过程*)
 Definition body_prim {V E: Type} (pg: PreGraph V E): 
-                  StateRelMonad.M (State V E) (ContinueOrBreak unit unit) :=
+                unit -> StateRelMonad.M (State V E) (ContinueOrBreak unit unit) :=
       (**s1 是初始状态， s2 是返回后的状态*)
       (* edges_candidates <- (fun s1 tmp s2 => tmp = set_of_the_edges_want_to_add pg s1 /\ s1 = s2);; *)
-      choice (test (fun s1 => (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
+      fun _ => choice (test (fun s1 => (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
               break tt)
-             (test (fun s1 => ~ (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
+              (test (fun s1 => ~ (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
               e <- get_any_edge_in_edge_candidates pg;;
               v <- get_any_vertex_in_vertex_candidates pg e;;
               add_the_edge_and_the_vertex pg e v;;
               continue tt).
+
+Definition prim {V E: Type} (pg: PreGraph V E): unit -> StateRelMonad.M (State V E) unit :=
+  fun _ => repeat_break (body_prim pg) tt.
+
+(* 不变量 *)
+Definition invariant {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
+  exists vl el, is_minimal_spanning_tree pg vl el 
+  /\ list_to_set s.(vertex_taken) ⊆ list_to_set vl /\ list_to_set s.(edge_taken) ⊆ list_to_set el.
+
+Theorem prim_functional_correctness {V E: Type} (pg: PreGraph V E): 
+  forall u: V, Hoare (fun s: State V E => s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil) 
+                      (prim pg tt)
+                      (fun (_: unit) (s: State V E) => is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
+Proof.
+  Abort.
