@@ -15,6 +15,7 @@ Require Import Coq.Sorting.Permutation.
 Require Import PL.FixedPoint.
 Require Import PL.Monad.
 Local Open Scope monad.
+Local Open Scope sets.
 Import SetsNotation
        KleeneFix Sets_CPO
        Monad
@@ -118,9 +119,13 @@ Definition constuct_graph_by_list {V E: Type} (vl: list V) (el: list E) (src: E 
 Definition graph_connected {V E: Type} (t: PreGraph V E): Prop := 
   forall x y, t.(vvalid) x -> t.(vvalid) y -> connected t x y.
 
+Definition is_legal_graph_by_list {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
+  is_legal_graph (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight)) /\ Nodup vl /\ Nodup el.
+
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
-   length el + 1 = length vl /\ is_legal_graph (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight))
-   /\ graph_connected (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight)).
+   length el + 1 = length vl /\ 
+   is_legal_graph_by_list pg vl el /\
+   graph_connected (constuct_graph_by_list vl el pg.(src) pg.(dst) pg.(weight)).
 
 Definition get_sum {V E: Type} (pg: PreGraph V E) (l: list E): Z :=
   fold_right Z.add 0%Z (map pg.(weight) l).
@@ -139,18 +144,12 @@ Definition is_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: lis
 Definition is_minimal_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop :=
   is_spanning_tree pg vl el /\ (forall vl' el', is_spanning_tree pg vl' el' -> (get_sum pg el <= get_sum pg el')%Z).
 
- (* 这里缺少一个语法， 新构建record实例时，如何验证他应该满足的性质 *)
-(* Definition add_one_edge {V E: Type} (pg: PreGraph V E) (t: PreGraph V E) (e: E): PreGraph V E :=
-  Build_PreGraph V E (t.(vvalid) ∪ (Sets.singleton (pg.(src) e)) ∪ (Sets.singleton (pg.(dst) e))) (pg.(evalid) ∪ (Sets.singleton e)) (pg.(src)) (pg.(dst)) (pg.(weight)). *)
-
-(**一个树加一条边 有且仅有 一个环*)
-(* Theorem tree_add_one_edge: forall {V E: Type} (pg: PreGraph V E) (t: PreGraph V E) (e: E),
-  is_tree pg t -> pg.(evalid) e -> ~ t.(evalid) e -> 
-  exists! l, is_Cycle  l.
+Theorem minimal_spanning_tree_exists {V E: Type}:
+  forall (pg: PreGraph V E), 
+    graph_connected pg ->
+    exists vl el, is_minimal_spanning_tree pg vl el.
 Proof.
-  
-Qed. *)
-
+  Admitted.
 
 Record State (V E: Type) := 
 {
@@ -214,15 +213,124 @@ Import StateRelMonadOp.
     
 (**开始定义算法过程*)
 Definition body_prim {V E: Type} (pg: PreGraph V E): 
-                  StateRelMonad.M (State V E) (ContinueOrBreak unit unit) :=
+                unit -> StateRelMonad.M (State V E) (ContinueOrBreak unit unit) :=
       (**s1 是初始状态， s2 是返回后的状态*)
       (* edges_candidates <- (fun s1 tmp s2 => tmp = set_of_the_edges_want_to_add pg s1 /\ s1 = s2);; *)
-      choice (test (fun s1 => (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
+      fun _ => choice (test (fun s1 => list_to_set s1.(vertex_taken) == pg.(vvalid));;
               break tt)
-             (test (fun s1 => ~ (set_of_the_edges_want_to_add pg s1) == Sets.empty);;
+              (test (fun s1 => ~ list_to_set s1.(vertex_taken) == pg.(vvalid));;
               e <- get_any_edge_in_edge_candidates pg;;
               v <- get_any_vertex_in_vertex_candidates pg e;;
               add_the_edge_and_the_vertex pg e v;;
               continue tt).
 
-(**Test Test Test*)
+Definition prim {V E: Type} (pg: PreGraph V E): unit -> StateRelMonad.M (State V E) unit :=
+  fun _ => repeat_break (body_prim pg) tt.
+
+(* 不变量 *)
+Definition I1 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
+  exists vl el, is_minimal_spanning_tree pg vl el 
+  /\ list_to_set s.(vertex_taken) ⊆ list_to_set vl /\ list_to_set s.(edge_taken) ⊆ list_to_set el.
+
+Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
+  is_tree pg s.(vertex_taken) s.(edge_taken).
+
+Lemma keep_I2 {V E: Type} (pg: PreGraph V E) (s1 s2: State V E):
+    forall (u: V) (pg: PreGraph V E),
+    pg.(vvalid) u ->
+    graph_connected pg -> 
+    Hoare (fun s => I2 pg s) 
+          (body_prim pg tt)
+          (fun res (s: State V E) => 
+              match res with
+              | by_continue _ => I2 pg s
+              | by_break _ => I2 pg s
+              end).
+Proof.
+Admitted.
+
+Theorem keep_I1 {V E: Type} (s1 s2: State V E):
+  forall (u: V) (pg: PreGraph V E),
+        pg.(vvalid) u -> 
+        graph_connected pg -> 
+        Hoare (fun s => I1 pg s) 
+        (body_prim pg tt)
+        (fun res (s: State V E) => 
+            match res with
+            | by_continue _ => I1 pg s
+            | by_break _ => I1 pg s
+            end).
+Proof.
+Admitted.
+
+Lemma initial_state {V E: Type} (s: State V E):
+    forall (u: V) (pg: PreGraph V E),
+    pg.(vvalid) u ->
+    graph_connected pg -> 
+    s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil -> I1 pg s /\ I2 pg s.
+Proof.
+  intros u.
+  unfold I1, I2, is_tree.
+  intros.
+  destruct H1 as [? ?].
+  split.
+  + pose proof (minimal_spanning_tree_exists pg H0).
+    destruct H3 as [vl [el ?]].
+    exists vl, el.
+    split; auto.
+    split.
+    - intros v ?.
+      unfold is_minimal_spanning_tree in H3.
+      unfold is_spanning_tree in H3.
+      destruct H3 as [[? ?] _].
+      unfold is_tree in H3.
+      destruct H3 as [? _].
+      rewrite H1 in H4.
+      unfold list_to_set in H4.
+      simpl in H4.
+      destruct H4; [| tauto].
+      subst.
+      apply H5.
+      apply H.
+    - rewrite H2.
+      unfold list_to_set.
+      simpl.
+      sets_unfold; tauto.
+  + split.
+    - rewrite H1, H2.
+      unfold length.
+      lia.
+    - split.
+    * unfold is_legal_graph_by_list.
+      unfold is_legal_graph.
+      split.
+      -- intros.
+          unfold constuct_graph_by_list.
+          unfold list_to_set.
+          simpl; split.
+          ++ rewrite H1.
+Admitted.
+
+
+Theorem prim_functional_correctness_foundation {V E: Type}: 
+    forall (u: V) (pg: PreGraph V E),
+        pg.(vvalid) u ->
+        graph_connected pg -> 
+        Hoare (fun s => I1 pg s)
+              (prim pg tt)
+              (fun (_: unit) (s: State V E) => 
+              is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
+Proof.
+Admitted.
+
+
+Theorem prim_functional_correctness {V E: Type}:
+    forall (u: V) (pg: PreGraph V E),
+      pg.(vvalid) u ->
+      graph_connected pg -> 
+      forall u: V, Hoare (fun s0 => s0.(vertex_taken) = u :: nil /\ s0.(edge_taken) = nil)
+                          (prim pg tt)
+                          (fun (_: unit) (s: State V E) => 
+                          is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
+Proof.
+Admitted.
