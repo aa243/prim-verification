@@ -499,7 +499,6 @@ Definition step {V E: Type} (pg: PreGraph V E) (x y: V): Prop :=
 Definition reachable {V E: Type} (pg: PreGraph V E) :=
   clos_refl_trans (step pg).
 
-
 (** 自反传递闭包_[clos_refl_trans]_是SetsClass库提供的定义。*)
 
 
