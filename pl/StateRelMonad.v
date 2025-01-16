@@ -5,10 +5,14 @@ Require Import Coq.Classes.Morphisms.
 Require Import Coq.Lists.List.
 Require Import Coq.Sorting.Permutation.
 Require Import PL.FixedPoint.
+Require Import PL.Monad.
 Import SetsNotation
-       KleeneFix Sets_CPO.
+       KleeneFix Sets_CPO
+       Monad
+       MonadNotation.
 Local Open Scope sets.
 Local Open Scope Z.
+Local Open Scope monad.
 
 Module Monad.
 
@@ -30,7 +34,9 @@ Definition ret (Σ A: Type) (a0: A) : M Σ A :=
 Definition bind (Σ A B: Type) (f : M Σ A) (g : A -> M Σ B) : M Σ B :=
   fun s1 b s3 => exists s2 a, f s1 a s2 /\ g a s2 b s3.
 
-(* Import SetMonadOperator1. *)
+End StateRelMonad.
+
+Import SetMonadOperator1.
 
 Module StateRelMonadOp.
 
@@ -263,4 +269,3 @@ Proof.
       * apply Hoare_ret.
 Qed.
 
-End StateRelMonad.
