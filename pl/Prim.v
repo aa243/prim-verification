@@ -66,7 +66,7 @@ Definition connected {V E: Type} (pg: PreGraph V E): V -> V -> Prop :=
 
 Record subgraph {V E: Type} (pg1 pg2: PreGraph V E): Prop :=
 {
-  subgraph_vvalid: pg1.(vvalid) == pg2.(vvalid);
+  subgraph_vvalid: pg1.(vvalid) ⊆ pg2.(vvalid);
   subgraph_evalid: pg1.(evalid) ⊆ pg2.(evalid);
   subgraph_src: forall e, e ∈ pg1.(evalid) -> pg1.(src) e = pg2.(src) e;
   subgraph_dst: forall e, e ∈ pg1.(evalid) -> pg1.(dst) e = pg2.(dst) e;

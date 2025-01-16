@@ -35,9 +35,7 @@ Definition bind (Σ A B: Type) (f : M Σ A) (g : A -> M Σ B) : M Σ B :=
   fun s1 b s3 => exists s2 a, f s1 a s2 /\ g a s2 b s3.
 
 End StateRelMonad.
-
 Import SetMonadOperator1.
-
 Module StateRelMonadOp.
 
 #[export] Instance state_rel_monad (Σ: Type): Monad (StateRelMonad.M Σ) :=
@@ -104,9 +102,11 @@ ret (by_break b).
 Definition Hoare {Σ A: Type} (P: Σ -> Prop) (c: StateRelMonad.M Σ A) (Q: A -> Σ -> Prop): Prop :=
   forall σ1 a σ2, P σ1 -> c σ1 a σ2 -> Q a σ2.
 
-End StateRelMonadOp.
 
-Import StateRelMonadOp.
+
+(* Import StateRelMonadOp. *)
+
+(* Module StateRelMonadOpTheorems. *)
 
 Theorem  Hoare_bind {Σ A B: Type}:
 forall (P: Σ -> Prop) (f: StateRelMonad.M Σ A) (M: A -> Σ -> Prop)
@@ -242,6 +242,18 @@ Proof.
   apply (H x _ _ _ H0 H1).
 Qed.
 
+Theorem Hoare_ret' {Σ A: Type}:
+  forall (P: Σ -> Prop) (Q: A -> Σ -> Prop) (a0: A),
+    (forall s, P s -> Q a0 s) ->
+    Hoare P (ret a0) Q.
+Proof.
+  intros.
+  unfold Hoare, ret; simpl; sets_unfold; unfold StateRelMonad.ret.
+  intros.
+  destruct H1; subst.
+  apply H. tauto.
+Qed.
+
 Theorem Hoare_repeat_break {A B Σ: Type}:
   forall (body: A -> StateRelMonad.M Σ (ContinueOrBreak A B))
          (P: A -> Σ -> Prop)
@@ -269,3 +281,6 @@ Proof.
       * apply Hoare_ret.
 Qed.
 
+(* End StateRelMonadOpTheorems. *)
+
+End StateRelMonadOp.
