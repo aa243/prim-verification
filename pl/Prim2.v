@@ -71,8 +71,39 @@ Definition step {V E: Type} (pg: PreGraph V E) (x y: V): Prop :=
 Definition connected {V E: Type} (pg: PreGraph V E): V -> V -> Prop :=
   clos_refl_trans (step pg).
 
+Lemma step_symmetric {V E: Type}:
+  forall (pg: PreGraph V E) (x y: V),
+    step pg x y -> step pg y x.
+Proof.
+  intros.
+  unfold step in *.
+  destruct H as [e ?].
+  exists e.
+  tauto.
+Qed.
+
+
+Lemma step_on_one_edge {V E: Type}:
+  forall (pg: PreGraph V E) (e: E),
+    is_legal_graph pg ->
+    pg.(evalid) e -> 
+    step pg (pg.(src) e) (pg.(dst) e).
+Proof.
+  intros.
+  unfold step.
+  exists e.
+  left.
+  unfold is_legal_graph in H.
+  specialize (H e H0).
+  destruct H.
+  constructor; auto.
+Qed.
+
+
 Record subgraph {V E: Type} (pg1 pg2: PreGraph V E): Prop :=
 {
+  subgraph_legal: is_legal_graph pg1;
+  biggraph_legal: is_legal_graph pg2;
   subgraph_vvalid: pg1.(vvalid) ⊆ pg2.(vvalid);
   subgraph_evalid: pg1.(evalid) ⊆ pg2.(evalid);
   subgraph_src: forall e, e ∈ pg1.(evalid) -> pg1.(src) e = pg2.(src) e;
@@ -83,8 +114,23 @@ Definition list_to_set {V: Type} (l: list V): V -> Prop :=
   fun v => In v l.
 
 Definition graph_connected {V E: Type} (pg: PreGraph V E): Prop := 
-  forall x y, pg.(vvalid) x -> pg.(vvalid) y -> connected pg x y.
-  
+  is_legal_graph pg /\ (forall x y, pg.(vvalid) x -> pg.(vvalid) y -> connected pg x y).
+
+Theorem connected_in_subgraph_then_connected_in_graph {V E: Type}:
+  forall (subg pg: PreGraph V E) x y, subgraph subg pg -> connected subg x y -> connected pg x y.
+Proof.
+  intros.
+  assert (step subg ⊆ step pg).
+  { unfold step.
+    sets_unfold.
+    intros.
+    destruct H1 as [e ?].
+    exists e.
+  }
+Admitted.
+
+
+
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
     length el + 1 = length vl /\
     graph_connected (Build_PreGraph V E vl el pg.(src) pg.(dst) pg.(weight)).
@@ -157,7 +203,7 @@ Definition set_of_adjacent_edge_to_taken {V E: Type} (pg: PreGraph V E) (s: Stat
   fun e => 
     pg.(evalid) e /\ 
     ((In (pg.(src) e) s.(vertex_taken) /\ ~ In (pg.(dst) e) s.(vertex_taken)) 
-    \/ (In (pg.(dst) e) s.(vertex_taken) /\ ~ In (pg.(dst) e) s.(vertex_taken))).
+    \/ (In (pg.(dst) e) s.(vertex_taken) /\ ~ In (pg.(src) e) s.(vertex_taken))).
 
 Definition set_of_the_edges_want_to_add {V E: Type} (pg: PreGraph V E) (s: State V E): E -> Prop :=
   fun e => set_of_adjacent_edge_to_taken pg s e /\ 
@@ -208,9 +254,208 @@ Definition I1 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
 Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   is_tree pg s.(vertex_taken) s.(edge_taken).
 
-Lemma keep_I2 {V E: Type} (pg: PreGraph V E) (s1 s2: State V E):
-    forall (u: V) (pg: PreGraph V E),
-    pg.(vvalid) u ->
+Theorem Hoare_get_any_edge_in_edge_candidates {V E: Type}:
+  forall (pg: PreGraph V E) (P: State V E -> Prop),
+  Hoare P (get_any_edge_in_edge_candidates pg) (fun e s => set_of_the_edges_want_to_add pg s e /\ P s).
+Proof.
+  intros.
+  unfold Hoare, get_any_edge_in_edge_candidates.
+  intros.
+  destruct H0.
+  subst.
+  tauto.
+Qed.
+
+Theorem Hoare_get_any_vertex_in_vertex_candidates {V E: Type}:
+  forall (pg: PreGraph V E) (e: E) (P: State V E -> Prop),
+  Hoare P (get_any_vertex_in_vertex_candidates pg e) (fun v s => set_of_the_vertices_want_to_add pg s e v /\ P s).
+Proof.
+  intros.
+  unfold Hoare, get_any_vertex_in_vertex_candidates.
+  intros.
+  destruct H0.
+  subst.
+  tauto.
+Qed.
+
+Definition I4 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
+  is_legal_graph (Build_PreGraph V E s.(vertex_taken) s.(edge_taken) pg.(src) pg.(dst) pg.(weight)).
+
+Theorem keep_I4 {V E: Type} (pg: PreGraph V E):
+  graph_connected pg -> 
+  Hoare (fun s => I4 pg s) 
+        (body_prim pg tt)
+        (fun res (s: State V E) => 
+            match res with
+            | by_continue _ => I4 pg s
+            | by_break _ => I4 pg s
+            end).
+Proof.
+Admitted.
+
+
+
+(* 选的图永远是legal的 *)
+(* Theorem the_graph_chosen_is_always_legal {V E: Type} (pg: PreGraph V E):
+  forall  .
+Proof.
+  
+Qed. *)
+
+Lemma vertices_candidate_is_connected {V E: Type}:
+  (* v是candiate， u是任意一点，u和v是连通的。 *)
+  forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V) (u: V),
+  graph_connected pg -> 
+  set_of_the_edges_want_to_add pg σ1 e ->
+  set_of_the_vertices_want_to_add pg σ1 e v ->
+  σ2.(vertex_taken) = v :: σ1.(vertex_taken) ->
+  σ2.(edge_taken) = e :: σ1.(edge_taken) ->
+  is_tree pg σ1.(vertex_taken) σ1.(edge_taken) ->
+  In u σ2.(vertex_taken) ->
+  connected
+  {|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |} v u.
+Proof.
+  intros.
+  unfold graph_connected in H.
+  destruct H as [H L].
+  unfold connected.
+  unfold set_of_the_edges_want_to_add in H0.
+  destruct H0.
+  clear H6.
+  unfold set_of_adjacent_edge_to_taken in H0.
+  destruct H0.
+  unfold set_of_the_vertices_want_to_add in H1.
+  unfold is_tree in H4.
+  destruct H4.
+  clear H4.
+  unfold graph_connected in H7.
+  assert (In v σ2.(vertex_taken)).
+  { rewrite H2. simpl. tauto. }
+  assert (In e σ2.(edge_taken)).
+  { rewrite H3. simpl. tauto. }
+  assert (pg.(src) = {|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |}.(src) ).
+  { reflexivity. }
+  assert (pg.(dst) = {|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |}.(dst) ). { reflexivity. }
+  rewrite H2 in H5.
+  simpl in H5.
+  destruct H5.
+  * rewrite H5; reflexivity.
+  * destruct H1.
+    - destruct H1.
+      transitivity_1n (pg.(dst) e).
+      + rewrite <- H1.
+        rewrite H9, H10.
+        apply (step_on_one_edge _ e); [ | apply H8].
+        Admitted.
+      (* + specialize (H6 (pg.(dst) e) u).
+        destruct H5.
+        ** destruct H5.
+           tauto.
+        ** destruct H5.
+           specialize (H6 H5 H10). *)
+            
+
+        
+
+
+Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
+  forall (pg: PreGraph V E) (e: E) (v: V),
+  Hoare
+  (fun s : State V E =>
+   set_of_the_vertices_want_to_add pg s e v /\
+   set_of_the_edges_want_to_add pg s e /\
+   ~ list_to_set s.(vertex_taken) == pg.(vvalid) /\
+   is_tree pg s.(vertex_taken) s.(edge_taken)
+   /\ I4 pg s)
+  (add_the_edge_and_the_vertex pg e v)
+  (fun _ s => is_tree pg s.(vertex_taken) s.(edge_taken) /\ I4 pg s).
+Proof.
+Admitted.
+  (* intros.
+  unfold Hoare, add_the_edge_and_the_vertex.
+  intros.
+  destruct H.
+  destruct H1.
+  destruct H2.
+  destruct H0.
+  unfold is_tree.
+  split.
+  + rewrite H0, H4.
+    simpl.
+    unfold is_tree in H3.
+    destruct H3.
+    rewrite H3.
+    lia.
+  + unfold graph_connected.
+    intros x y ? ?.
+    assert (In x σ2.(vertex_taken)).
+    { apply H5. }
+    assert (In y σ2.(vertex_taken)).
+    { apply H6. }
+    rewrite H0 in H7.
+    rewrite H0 in H8.
+    simpl in H7.
+    simpl in H8.
+    destruct H7.
+    - subst x.
+      apply (vertices_candidate_is_connected _ σ1 σ2 e v y) ; [ tauto | tauto | tauto | tauto | tauto | tauto].
+    - destruct H8.
+      * subst y.
+        (* apply clos_refl_trans_sym_sym. *)
+      Admitted. *)
+  
+
+Lemma keep_I2_and_I4 {V E: Type} (pg: PreGraph V E):
+graph_connected pg -> 
+Hoare (fun s => I2 pg s /\ I4 pg s) 
+      (body_prim pg tt)
+      (fun res (s: State V E) => 
+          match res with
+          | by_continue _ => I2 pg s /\ I4 pg s
+          | by_break _ => I2 pg s /\ I4 pg s
+          end).
+Proof.
+intros.
+unfold I2, body_prim.
+apply Hoare_choice.
++ apply Hoare_test_bind.
+  intros.
+  apply Hoare_ret'.
+  intros.
+  tauto.
++ apply Hoare_test_bind.
+  eapply Hoare_bind.
+  * apply (Hoare_get_any_edge_in_edge_candidates pg _).
+  * intros e.
+    eapply Hoare_bind.
+    ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
+    ++ intros v.
+        eapply Hoare_bind; [ | intros; apply Hoare_ret'].
+        +++ apply (Hoare_add_the_edge_and_the_vertex pg e v).
+        +++ intros. 
+            simpl in H0.
+            tauto.
+Qed.
+
+(* Lemma keep_I2 {V E: Type} (pg: PreGraph V E):
     graph_connected pg -> 
     Hoare (fun s => I2 pg s) 
           (body_prim pg tt)
@@ -220,10 +465,8 @@ Lemma keep_I2 {V E: Type} (pg: PreGraph V E) (s1 s2: State V E):
               | by_break _ => I2 pg s
               end).
 Proof.
-  intros.
-  unfold I2, body_prim.
-  (* apply Hoare_choice. *)
-Admitted.
+Admitted. *)
+
 
 (* 设{x,y}是新选的边，x在已选的里，y不在。 如果{x,y}在原来的最小生成树中，什么也不用干
 如果不在，那么要修改这个最小生成树，要加上{x,y}，删掉一条边。
@@ -240,7 +483,7 @@ Admitted.
 
 (* Theorem find_the_edge_want_to_delete {V E: Type} (pg: PreGraph V E) (s: State V E) (e: E):
 Proof.
-  
+  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Qed. *)
 
 
