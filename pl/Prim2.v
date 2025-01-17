@@ -254,6 +254,10 @@ Definition I1 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
 Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   is_tree pg s.(vertex_taken) s.(edge_taken).
 
+(* 选了所有点 *)
+Definition I3 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
+  list_to_set s.(vertex_taken) == pg.(vvalid).
+
 Theorem Hoare_get_any_edge_in_edge_candidates {V E: Type}:
   forall (pg: PreGraph V E) (P: State V E -> Prop),
   Hoare P (get_any_edge_in_edge_candidates pg) (fun e s => set_of_the_edges_want_to_add pg s e /\ P s).
@@ -277,6 +281,7 @@ Proof.
   subst.
   tauto.
 Qed.
+
 
 Definition I4 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   is_legal_graph (Build_PreGraph V E s.(vertex_taken) s.(edge_taken) pg.(src) pg.(dst) pg.(weight)).
@@ -373,9 +378,6 @@ Proof.
            specialize (H6 H5 H10). *)
             
 
-        
-
-
 Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
   Hoare
@@ -421,7 +423,7 @@ Admitted.
       * subst y.
         (* apply clos_refl_trans_sym_sym. *)
       Admitted. *)
-  
+      
 
 Lemma keep_I2_and_I4 {V E: Type} (pg: PreGraph V E):
 graph_connected pg -> 
@@ -454,6 +456,39 @@ apply Hoare_choice.
             simpl in H0.
             tauto.
 Qed.
+
+Lemma break_with_I3 {V E: Type} (pg: PreGraph V E):
+  forall (pg: PreGraph V E),
+  graph_connected pg ->
+  Hoare (fun s => I2 pg s)
+        (body_prim pg tt)
+        (fun res (s: State V E) =>
+            match res with
+            | by_continue _ => I2 pg s
+            | by_break _ => I3 pg s
+            end).
+Proof.
+  intros.
+  unfold body_prim.
+  apply Hoare_choice.
+  + apply Hoare_test_bind.
+    unfold I3.
+    apply Hoare_ret'.
+    tauto.
+  + apply Hoare_test_bind.
+    unfold I3.
+    eapply Hoare_bind; [ apply Hoare_get_any_edge_in_edge_candidates | ].
+    intros e.
+    eapply Hoare_bind; [ apply Hoare_get_any_vertex_in_vertex_candidates | ].
+    intros v.
+    eapply Hoare_bind; [ | intros; apply Hoare_ret'].
+    * apply (Hoare_add_the_edge_and_the_vertex pg0 e v).
+    * intros.
+      simpl in H0.
+      unfold I2.
+      tauto.
+Qed.
+    
 
 (* Lemma keep_I2 {V E: Type} (pg: PreGraph V E):
     graph_connected pg -> 
@@ -549,23 +584,103 @@ Proof.
       lia.
 Admitted.
 
-Theorem prim_find_tree_if_break {V E: Type}:
-  forall (u: V) (pg: PreGraph V E),
-  pg.(vvalid) u ->
+Theorem prim_find_tree_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
   graph_connected pg -> 
-  Hoare (fun s0 => s0.(vertex_taken) = u :: nil /\ s0.(edge_taken) = nil)
+  Hoare (fun s0 => I2 pg s0)
         (prim pg tt)
         (fun (_: unit) (s: State V E) => 
-            is_tree pg s.(vertex_taken) s.(edge_taken)).
+            I2 pg s).
 Proof.
   intros.
   unfold prim.
-  apply (Hoare_repeat_break (body_prim pg) (fun (_: unit) (s0: State V E) => s0.(vertex_taken) = u :: nil /\ s0.(edge_taken) = nil)         (fun (_: unit) (s: State V E) => 
-  is_tree pg s.(vertex_taken) s.(edge_taken))).
+  apply (Hoare_repeat_break (body_prim pg) 
+                            (fun (_: unit) (s0: State V E) => I2 pg s0)
+                            (fun (_: unit) (s: State V E) => 
+                              I2 pg s)).
   intros.
-  unfold body_prim.
-Admitted.
+  apply (keep_I2 pg _).
+  apply H.
+Qed.
 
+Theorem prim_find_all_vertices_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
+  graph_connected pg -> 
+  Hoare (fun s0 => I2 pg s0)
+        (prim pg tt)
+        (fun (_: unit) (s: State V E) => 
+            I3 pg s).
+Proof.
+  intros.
+  unfold prim.
+  apply (Hoare_repeat_break (body_prim pg) 
+                            (fun (_: unit) (s0: State V E) => I2 pg s0)
+                            (fun (_: unit) (s: State V E) => 
+                              I3 pg s)).
+  intros.
+  apply (break_with_I3 pg _).
+  apply H.
+Qed.
+
+Theorem prim_find_spanning_tree_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
+    graph_connected pg -> 
+    Hoare (fun s0 => I2 pg s0)
+          (prim pg tt)
+          (fun (_: unit) (s: State V E) => 
+              is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
+Proof.
+  intros.
+  unfold is_spanning_tree.
+  pose proof (prim_find_tree_if_break_f pg H).
+  pose proof (prim_find_all_vertices_if_break_f pg H).
+  unfold I2 in H0,H1.
+  unfold I3 in H1.
+  unfold I2.
+  unfold Hoare.
+  unfold Hoare in H0, H1.
+  intros.
+  specialize (H0 σ1 a σ2).
+  specialize (H1 σ1 a σ2).
+  pose proof H0 H2 H3.
+  pose proof H1 H2 H3.
+  tauto.
+Qed.
+
+Lemma initial_state_to_I2 {V E: Type} (s: State V E):
+    forall (u: V) (pg: PreGraph V E),
+    pg.(vvalid) u ->
+    graph_connected pg -> 
+    s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil -> I2 pg s.
+Proof.
+  intros.
+  unfold I2.
+  unfold is_tree.
+  destruct H1 as [? ?].
+  rewrite H2.
+  rewrite H1.
+  simpl.
+  split; [ lia | ].
+  unfold graph_connected.
+  intros.
+  assert (In x [u]).
+  {
+    apply H3.
+  }
+  simpl in H5.
+  destruct H5; [ subst | tauto].
+  assert (In y [x]).
+  {
+    apply H4. 
+  }
+  assert (x = y).
+  {
+    simpl in H5.
+    destruct H5; [ tauto | tauto].
+  }
+  subst.
+  reflexivity.
+Qed.
 
 
 Theorem prim_find_spanning_tree_if_break {V E: Type}:
@@ -578,8 +693,18 @@ Theorem prim_find_spanning_tree_if_break {V E: Type}:
               is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
 Proof.
   intros.
-  unfold prim.
-Admitted.
+  unfold Hoare.
+  pose proof (prim_find_spanning_tree_if_break_f pg H0).
+  unfold Hoare in H1.
+  intros σ1 a σ2.
+  specialize (H1 σ1 a σ2).
+  pose proof (initial_state_to_I2 σ1 u pg).
+  pose proof H2 H H0.
+  intros.
+  pose proof (H3 H4).
+  pose proof (H1 H6 H5).
+  tauto.
+Qed.
 
 
 
