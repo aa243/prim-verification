@@ -116,20 +116,163 @@ Definition list_to_set {V: Type} (l: list V): V -> Prop :=
 Definition graph_connected {V E: Type} (pg: PreGraph V E): Prop := 
   is_legal_graph pg /\ (forall x y, pg.(vvalid) x -> pg.(vvalid) y -> connected pg x y).
 
+Theorem connected_symmetric {V E: Type}:
+  forall (pg: PreGraph V E) x y, connected pg x y -> connected pg y x.
+Proof.
+  unfold connected.
+  intros.
+  induction_1n H.
+  + reflexivity.
+  + assert (step pg x0 x).
+    {
+      unfold step in H0.
+      unfold step.
+      destruct H0 as [e ?].
+      exists e.
+      destruct H0.
+      + right.
+        destruct H0.
+        split.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+      + left.
+        destruct H0.
+        split.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+    }
+  transitivity_n1 x0.
+  * tauto.
+  * tauto.
+Qed.
+
 Theorem connected_in_subgraph_then_connected_in_graph {V E: Type}:
   forall (subg pg: PreGraph V E) x y, subgraph subg pg -> connected subg x y -> connected pg x y.
 Proof.
   intros.
   assert (step subg ⊆ step pg).
-  { unfold step.
+  { 
+    destruct H.
+    unfold step.
     sets_unfold.
     intros.
-    destruct H1 as [e ?].
+    destruct H as [e ?].
     exists e.
+    destruct H.
+    + left.
+      destruct H.
+      split.
+      - sets_unfold in subgraph_evalid0.
+        specialize (subgraph_evalid0 e).
+        tauto. 
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a).
+        tauto.
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a0).
+        tauto.
+      - specialize (subgraph_src0 e).
+        pose proof subgraph_src0 step_evalid0.
+        rewrite <- H.
+        tauto.
+      - specialize (subgraph_dst0 e).
+        pose proof subgraph_dst0 step_evalid0.
+        rewrite <- H.
+        tauto.
+    + right.
+      destruct H.
+      split.
+      - sets_unfold in subgraph_evalid0.
+        specialize (subgraph_evalid0 e).
+        tauto. 
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a0).
+        pose proof subgraph_vvalid0 step_src_valid0.
+        tauto.
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a).
+        pose proof subgraph_vvalid0 step_dst_valid0.
+        tauto.
+      - specialize (subgraph_src0 e).
+        pose proof subgraph_src0 step_evalid0.
+        rewrite <- H.
+        tauto.
+      - specialize (subgraph_dst0 e).
+        pose proof subgraph_dst0 step_evalid0.
+        rewrite <- H.
+        tauto.
   }
-Admitted.
-
-
+  unfold connected.
+  unfold connected in H0.
+  induction_1n H0.
+  + reflexivity.
+  + specialize (H1 x x0).
+    assert (step subg ⊆ step pg).
+    { 
+      destruct H.
+      unfold step.
+      sets_unfold.
+      intros.
+      destruct H as [e ?].
+      exists e.
+      destruct H.
+      + left.
+        destruct H.
+        split.
+        - sets_unfold in subgraph_evalid0.
+          specialize (subgraph_evalid0 e).
+          tauto. 
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a).
+          tauto.
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a0).
+          tauto.
+        - specialize (subgraph_src0 e).
+          pose proof subgraph_src0 step_evalid0.
+          rewrite <- H.
+          tauto.
+        - specialize (subgraph_dst0 e).
+          pose proof subgraph_dst0 step_evalid0.
+          rewrite <- H.
+          tauto.
+      + right.
+        destruct H.
+        split.
+        - sets_unfold in subgraph_evalid0.
+          specialize (subgraph_evalid0 e).
+          tauto. 
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a0).
+          pose proof subgraph_vvalid0 step_src_valid0.
+          tauto.
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a).
+          pose proof subgraph_vvalid0 step_dst_valid0.
+          tauto.
+        - specialize (subgraph_src0 e).
+          pose proof subgraph_src0 step_evalid0.
+          rewrite <- H.
+          tauto.
+        - specialize (subgraph_dst0 e).
+          pose proof subgraph_dst0 step_evalid0.
+          rewrite <- H.
+          tauto.
+    }
+    specialize (IHrt pg).
+    pose proof IHrt H H3.
+    pose proof H1 H2.
+    transitivity x0; [ | tauto].
+    transitivity_1n x0.
+    * tauto.
+    * reflexivity.
+Qed.
 
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
     length el + 1 = length vl /\
@@ -390,8 +533,7 @@ Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
   (add_the_edge_and_the_vertex pg e v)
   (fun _ s => is_tree pg s.(vertex_taken) s.(edge_taken) /\ I4 pg s).
 Proof.
-Admitted.
-  (* intros.
+  intros.
   unfold Hoare, add_the_edge_and_the_vertex.
   intros.
   destruct H.
@@ -400,29 +542,34 @@ Admitted.
   destruct H0.
   unfold is_tree.
   split.
-  + rewrite H0, H4.
-    simpl.
-    unfold is_tree in H3.
-    destruct H3.
-    rewrite H3.
-    lia.
-  + unfold graph_connected.
-    intros x y ? ?.
-    assert (In x σ2.(vertex_taken)).
-    { apply H5. }
-    assert (In y σ2.(vertex_taken)).
-    { apply H6. }
-    rewrite H0 in H7.
-    rewrite H0 in H8.
-    simpl in H7.
-    simpl in H8.
-    destruct H7.
-    - subst x.
-      apply (vertices_candidate_is_connected _ σ1 σ2 e v y) ; [ tauto | tauto | tauto | tauto | tauto | tauto].
-    - destruct H8.
-      * subst y.
+  + 
+    split.
+    * rewrite H0, H4.
+      simpl.
+      destruct H3.
+      unfold is_tree in H3.
+      destruct H3.
+      rewrite H3.
+      lia.
+    * unfold graph_connected.
+      split.
+
+      (* intros x y ? ?.
+      assert (In x σ2.(vertex_taken)).
+      { apply H5. }
+      assert (In y σ2.(vertex_taken)).
+      { apply H6. }
+      rewrite H0 in H7.
+      rewrite H0 in H8.
+      simpl in H7.
+      simpl in H8.
+      destruct H7.
+      - subst x.
+        apply (vertices_candidate_is_connected _ σ1 σ2 e v y) ; [ tauto | tauto | tauto | tauto | tauto | tauto].
+      - destruct H8.
+        * subst y. *)
         (* apply clos_refl_trans_sym_sym. *)
-      Admitted. *)
+      Admitted.
       
 
 Lemma keep_I2_and_I4 {V E: Type} (pg: PreGraph V E):
