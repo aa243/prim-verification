@@ -337,17 +337,78 @@ Definition is_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: lis
 Definition is_minimal_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop :=
   is_spanning_tree pg vl el /\ (forall vl' el', is_spanning_tree pg vl' el' -> (get_sum pg el <= get_sum pg el')%Z).
 
-  Definition reachable_via_lists {V E} (pg: PreGraph V E) (P: list V): V -> V -> Prop :=
-    clos_refl_trans (fun x y => step pg x y /\ In y P).
+Definition reachable_via_lists {V E} (pg: PreGraph V E) (P: list V): V -> V -> Prop :=
+  clos_refl_trans (fun x y => step pg x y /\ In y P).
+
+Definition is_new_list_delete_one_from_original {A} (l: list A) (a: A): list A -> Prop :=
+  fun l' => forall x, In x l' <-> In x l /\ ~ x = a.
   
-  Definition is_new_list_delete_one_from_original {A} (l: list A) (a: A): list A -> Prop :=
-    fun l' => forall x, In x l' <-> In x l /\ ~ x = a.
-  
-  Lemma deleted_list_exists {A} (l: list A) (a: A):
-    NoDup l -> In a l -> exists l', length l' + 1 = length l /\ NoDup l' 
-  /\ is_new_list_delete_one_from_original l a l' .
-  Proof.
-  Admitted.
+
+Lemma deleted_list_exists {A} (l: list A) (a: A):
+  NoDup l -> In a l -> exists l', length l' + 1 = length l /\ NoDup l' 
+/\ is_new_list_delete_one_from_original l a l'.
+Proof.
+  intros.
+  apply in_split in H0.
+  destruct H0 as [l1 [l2 ?]].
+  exists (l1 ++ l2).
+  unfold is_new_list_delete_one_from_original.
+  intros.
+  split.
+  *** rewrite H0.
+    rewrite (app_length l1 l2).
+    rewrite app_length.
+    simpl.
+    lia.
+  *** split.
+  ** rewrite H0 in H.
+    apply NoDup_remove_1 in H.
+    tauto.
+  ** intros.
+    split.
+  + intros.
+    apply in_app_or in H1.
+    destruct H1.
+    ++ split.
+        +++ rewrite H0.
+            apply in_or_app.
+            left; tauto.
+        +++ rewrite H0 in H.
+            apply NoDup_remove_2 in H.
+            destruct (classic (x = a)).
+            * subst.
+              assert (In a l1 \/ In a l2).
+              { tauto. }
+              apply in_or_app in H0.
+              tauto.
+            * tauto.
+    ++ split.
+        +++ rewrite H0.
+            apply in_or_app.
+            right. simpl. tauto.
+        +++ rewrite H0 in H.
+            apply NoDup_remove_2 in H.
+            destruct (classic (x = a)).
+            * subst.
+              assert (In a l1 \/ In a l2).
+              { tauto. }
+              apply in_or_app in H0.
+              tauto.
+            * tauto.
+  + intros.
+    destruct H1.
+    apply in_or_app.
+      rewrite H0 in H1.
+    apply in_app_or in H1.
+    destruct H1.
+    ++ tauto.
+    ++ simpl in H1.
+        destruct H1.
+        +++ subst.
+            tauto.
+        +++ subst.
+            tauto.
+Qed.
   
 Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
   NoDup l -> In a l -> 
