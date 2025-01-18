@@ -1,6 +1,7 @@
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.Classes.RelationClasses.
+Require Import Coq.Logic.Classical.
 From SetsClass Require Import SetsClass.
 Import SetsNotation.
 Local Open Scope sets_scope.
@@ -1135,35 +1136,79 @@ Proof.
   tauto.
 Qed.
 
-(* 设{x,y}是新选的边，x在已选的里，y不在。 如果{x,y}在原来的最小生成树中，什么也不用干
-如果不在，那么要修改这个最小生成树，要加上{x,y}，删掉一条边。
+(* 设{u,v}是新选的边，u在已选的里，v不在。 如果{u,v}在原来的最小生成树中，什么也不用干
+如果不在，那么要修改这个最小生成树，要加上{u,v}，删掉一条边。
 先来陈述找到这条要删的边的算法。 *)
 
-(*  假设通过这个算法找到要删的边叫{u,v}，
-1、要证明，删除u，v后，任意一点k，只用删除完生成树的边，要么和u连通，要么和v连通
+(*  假设通过这个算法找到要删的边叫{x,y}，
+1、要证明，删除x,y后，任意一点k，只用删除完生成树的边，要么和x连通，要么和y连通
    证明思路：未知
-2、要证明：加上{x,y}后，u,v连通了
-  证明思路：这跟{u,v}的构造有关
-            先证明在y与x的在原先最小生成树的路径中，存在某一个边{u,v}，u还在已经选的树里，但v就不在了
-            {u,v}的构造就选成这个。
-            那么v->y（由构造）， y->x, x->u（已经选的是一棵树）。*)
+2、要证明：加上{u,v}后，x,y连通了
+  证明思路：这跟{x,y}的构造有关
+            先证明在v与u的在原先最小生成树的路径中，存在某一个边{x,y}，x还在已经选的树里，但y就不在了
+            {x,y}的构造就选成这个。
+            那么y->v（由构造）， v->u, u->x（已经选的是一棵树）。*)
 
-(* Theorem find_the_edge_want_to_delete {V E: Type} (pg: PreGraph V E) (s: State V E) (e: E):
+Definition reachable_via_lists {V E} (pg: PreGraph V E) (P: list V): V -> V -> Prop :=
+  clos_refl_trans (fun x y => step pg x y /\ In y P).
+
+Definition is_new_list_delete_one_from_original {A} (l: list A) (a: A): list A -> Prop :=
+  fun l' => forall x, In x l' <-> In x l /\ ~ x = a.
+
+Lemma deleted_list_exists {A} (l: list A) (a: A):
+  NoDup l -> In a l -> exists l', is_new_list_delete_one_from_original l a l' .
 Proof.
-  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-Qed. *)
+  intros.
+  apply in_split in H0.
+  destruct H0 as [l1 [l2 ?]].
+  exists (l1 ++ l2).
+  unfold is_new_list_delete_one_from_original.
+  intros.
+  split.
+  + intros.
+    apply in_app_or in H1.
+    destruct H1.
+    ++ split.
+        +++ rewrite H0.
+            apply in_or_app.
+            left; tauto.
+        +++ rewrite H0 in H.
+            apply NoDup_remove_2 in H.
+            
+
+    
+Qed.
+  
+
+Definition is_graph_after_delete {V E} (pg: PreGraph V E) (vl: list V) (el: list E) (e: E): list V -> list E -> Prop :=
+  fun vl' el' => is_new_list_delete_one_from_original el e el'.
+
+Definition is_graph_after_add {V E} (pg: PreGraph V E) (vl: list V) (el: list E) (e: E): list V -> list E -> Prop :=
+  fun vl' el' => is_new_list_add_one_from_original el e el'.
+
+Theorem either_with_x_or_with_y {V E: Type}:
+  forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E) (x y k: V),
+    graph_connected pg ->
+    is_minimal_spanning_tree pg vl el ->
+    In e el ->
+    pg.(vvalid) k ->
+    (x = pg.(src) e /\ y = pg.(dst) e) \/ (x = pg.(dst) e /\ y = pg.(src) e) ->
+
+    
 
 Theorem intermediate_point_between_x_and_y {V E: Type}:
-  forall (pg: PreGraph V E) (σ1: State V E) (e: E) (v: V),
+  forall (pg: PreGraph V E) (s: State V E) (e: E) (v: V) (vl: list V) (el: list E),
     graph_connected pg ->
-    set_of_the_vertices_want_to_add pg σ1 e v ->
-    set_of_the_edges_want_to_add pg σ1 e -> 
-    .
+    set_of_the_vertices_want_to_add pg s e v ->
+    set_of_the_edges_want_to_add pg s e -> 
+    ~ list_to_set s.(vertex_taken) == pg.(vvalid) ->
+    is_minimal_spanning_tree pg vl el ->
+    list_to_set s.(vertex_taken) ⊆ list_to_set vl ->
+    list_to_set s.(edge_taken) ⊆ list_to_set el ->
+    (exists f x y, ).
 Proof.
   
 Qed.
-
-
 
 
 
@@ -1191,7 +1236,7 @@ Proof.
   intros; clear a.
   destruct H0 as [H2 [H3 [H4 [vl [el [H5 [H6 H7]]]]]]].
   destruct H1 as [H0 H1].
-
+Admitted.
 
 (* Level 3 *)
 Theorem keep_I1 {V E: Type} (s1 s2: State V E):
@@ -1243,8 +1288,16 @@ Proof.
     specialize (H0 a).
     destruct H0; tauto.
   + intros.
-    specialize (IHL A).
-    Admitted.
+    assert (forall a0, ~ a0 = a -> A a0 -> In a0 L).
+    { intros.
+      specialize (H0 a0 H2).
+      simpl in H0.
+      destruct H0; [ subst;tauto | tauto]. }
+    pose proof (IHL (A ∩ Sets.complement (Sets.singleton a))).
+    assert (exists a0, A a0 /\ ~ a0 = a).
+Admitted.
+
+
     
 (* Level 3 *)
 Theorem finite_graph_has_finite_subgraphs {V E: Type}: 
