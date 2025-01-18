@@ -116,18 +116,163 @@ Definition list_to_set {V: Type} (l: list V): V -> Prop :=
 Definition graph_connected {V E: Type} (pg: PreGraph V E): Prop := 
   is_legal_graph pg /\ (forall x y, pg.(vvalid) x -> pg.(vvalid) y -> connected pg x y).
 
+Theorem connected_symmetric {V E: Type}:
+  forall (pg: PreGraph V E) x y, connected pg x y -> connected pg y x.
+Proof.
+  unfold connected.
+  intros.
+  induction_1n H.
+  + reflexivity.
+  + assert (step pg x0 x).
+    {
+      unfold step in H0.
+      unfold step.
+      destruct H0 as [e ?].
+      exists e.
+      destruct H0.
+      + right.
+        destruct H0.
+        split.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+      + left.
+        destruct H0.
+        split.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+        - tauto.
+    }
+  transitivity_n1 x0.
+  * tauto.
+  * tauto.
+Qed.
+
 Theorem connected_in_subgraph_then_connected_in_graph {V E: Type}:
   forall (subg pg: PreGraph V E) x y, subgraph subg pg -> connected subg x y -> connected pg x y.
 Proof.
   intros.
   assert (step subg ⊆ step pg).
-  { unfold step.
+  { 
+    destruct H.
+    unfold step.
     sets_unfold.
     intros.
-    destruct H1 as [e ?].
+    destruct H as [e ?].
     exists e.
+    destruct H.
+    + left.
+      destruct H.
+      split.
+      - sets_unfold in subgraph_evalid0.
+        specialize (subgraph_evalid0 e).
+        tauto. 
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a).
+        tauto.
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a0).
+        tauto.
+      - specialize (subgraph_src0 e).
+        pose proof subgraph_src0 step_evalid0.
+        rewrite <- H.
+        tauto.
+      - specialize (subgraph_dst0 e).
+        pose proof subgraph_dst0 step_evalid0.
+        rewrite <- H.
+        tauto.
+    + right.
+      destruct H.
+      split.
+      - sets_unfold in subgraph_evalid0.
+        specialize (subgraph_evalid0 e).
+        tauto. 
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a0).
+        pose proof subgraph_vvalid0 step_src_valid0.
+        tauto.
+      - sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 a).
+        pose proof subgraph_vvalid0 step_dst_valid0.
+        tauto.
+      - specialize (subgraph_src0 e).
+        pose proof subgraph_src0 step_evalid0.
+        rewrite <- H.
+        tauto.
+      - specialize (subgraph_dst0 e).
+        pose proof subgraph_dst0 step_evalid0.
+        rewrite <- H.
+        tauto.
   }
-Admitted.
+  unfold connected.
+  unfold connected in H0.
+  induction_1n H0.
+  + reflexivity.
+  + specialize (H1 x x0).
+    assert (step subg ⊆ step pg).
+    { 
+      destruct H.
+      unfold step.
+      sets_unfold.
+      intros.
+      destruct H as [e ?].
+      exists e.
+      destruct H.
+      + left.
+        destruct H.
+        split.
+        - sets_unfold in subgraph_evalid0.
+          specialize (subgraph_evalid0 e).
+          tauto. 
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a).
+          tauto.
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a0).
+          tauto.
+        - specialize (subgraph_src0 e).
+          pose proof subgraph_src0 step_evalid0.
+          rewrite <- H.
+          tauto.
+        - specialize (subgraph_dst0 e).
+          pose proof subgraph_dst0 step_evalid0.
+          rewrite <- H.
+          tauto.
+      + right.
+        destruct H.
+        split.
+        - sets_unfold in subgraph_evalid0.
+          specialize (subgraph_evalid0 e).
+          tauto. 
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a0).
+          pose proof subgraph_vvalid0 step_src_valid0.
+          tauto.
+        - sets_unfold in subgraph_vvalid0.
+          specialize (subgraph_vvalid0 a).
+          pose proof subgraph_vvalid0 step_dst_valid0.
+          tauto.
+        - specialize (subgraph_src0 e).
+          pose proof subgraph_src0 step_evalid0.
+          rewrite <- H.
+          tauto.
+        - specialize (subgraph_dst0 e).
+          pose proof subgraph_dst0 step_evalid0.
+          rewrite <- H.
+          tauto.
+    }
+    specialize (IHrt pg).
+    pose proof IHrt H H3.
+    pose proof H1 H2.
+    transitivity x0; [ | tauto].
+    transitivity_1n x0.
+    * tauto.
+    * reflexivity.
+Qed.
 
 Theorem connected_symmetric {V E: Type}:
  forall (pg: PreGraph V E) x y, connected pg x y -> connected pg y x.
@@ -164,7 +309,6 @@ Proof.
  * tauto.
  * tauto.
 Qed.
-
 
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
     length el + 1 = length vl /\
@@ -289,6 +433,10 @@ Definition I1 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
 Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   is_tree pg s.(vertex_taken) s.(edge_taken).
 
+(* 选了所有点 *)
+Definition I3 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
+  list_to_set s.(vertex_taken) == pg.(vvalid).
+
 Theorem Hoare_get_any_edge_in_edge_candidates {V E: Type}:
   forall (pg: PreGraph V E) (P: State V E -> Prop),
   Hoare P (get_any_edge_in_edge_candidates pg) (fun e s => set_of_the_edges_want_to_add pg s e /\ P s).
@@ -312,6 +460,7 @@ Proof.
   subst.
   tauto.
 Qed.
+
 
 Definition I4 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   is_legal_graph (Build_PreGraph V E s.(vertex_taken) s.(edge_taken) pg.(src) pg.(dst) pg.(weight)).
@@ -664,7 +813,6 @@ Proof.
   
 Qed.
 
-
 Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
   graph_connected pg ->
@@ -757,8 +905,6 @@ Proof.
           -- specialize (H9 x y H7 H8).
             tauto.
 Qed.
-          
-  
 
 (* Lemma keep_I2_and_I4 {V E: Type} (pg: PreGraph V E):
 graph_connected pg -> 
@@ -824,6 +970,37 @@ Proof.
               tauto.
 Qed.
 
+Lemma break_with_I3 {V E: Type} (pg: PreGraph V E):
+  forall (pg: PreGraph V E),
+  graph_connected pg ->
+  Hoare (fun s => I2 pg s /\ I4 pg s)
+        (body_prim pg tt)
+        (fun res (s: State V E) =>
+            match res with
+            | by_continue _ => I2 pg s /\ I4 pg s
+            | by_break _ => I3 pg s
+            end).
+Proof.
+  intros.
+  unfold body_prim.
+  apply Hoare_choice.
+  + apply Hoare_test_bind.
+    unfold I3.
+    apply Hoare_ret'.
+    tauto.
+  + apply Hoare_test_bind.
+    unfold I3.
+    eapply Hoare_bind; [ apply Hoare_get_any_edge_in_edge_candidates | ].
+    intros e.
+    eapply Hoare_bind; [ apply Hoare_get_any_vertex_in_vertex_candidates | ].
+    intros v.
+    eapply Hoare_bind; [ | intros; apply Hoare_ret'].
+    * apply (Hoare_add_the_edge_and_the_vertex pg0 e v).
+    * intros.
+      simpl in H0.
+      unfold I2.
+      tauto.
+Qed.
 
 (* 设{x,y}是新选的边，x在已选的里，y不在。 如果{x,y}在原来的最小生成树中，什么也不用干
 如果不在，那么要修改这个最小生成树，要加上{x,y}，删掉一条边。
@@ -906,23 +1083,123 @@ Proof.
       lia.
 Admitted.
 
-Theorem prim_find_tree_if_break {V E: Type}:
-  forall (u: V) (pg: PreGraph V E),
-  pg.(vvalid) u ->
+Theorem prim_find_tree_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
   graph_connected pg -> 
-  Hoare (fun s0 => s0.(vertex_taken) = u :: nil /\ s0.(edge_taken) = nil)
+  Hoare (fun s0 => I2 pg s0 /\ I4 pg s0)
         (prim pg tt)
         (fun (_: unit) (s: State V E) => 
-            is_tree pg s.(vertex_taken) s.(edge_taken)).
+        I2 pg s /\ I4 pg s).
 Proof.
   intros.
   unfold prim.
-  apply (Hoare_repeat_break (body_prim pg) (fun (_: unit) (s0: State V E) => s0.(vertex_taken) = u :: nil /\ s0.(edge_taken) = nil)         (fun (_: unit) (s: State V E) => 
-  is_tree pg s.(vertex_taken) s.(edge_taken))).
+  apply (Hoare_repeat_break (body_prim pg) 
+                            (fun (_: unit) (s0: State V E) => I2 pg s0 /\ I4 pg s0)
+                            (fun (_: unit) (s: State V E) => 
+                            I2 pg s /\ I4 pg s)).
   intros.
-  unfold body_prim.
-Admitted.
+  apply (keep_I2_and_I4 pg ).
+  apply H.
+Qed.
 
+Theorem prim_find_all_vertices_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
+  graph_connected pg -> 
+  Hoare (fun s0 => I2 pg s0 /\ I4 pg s0)
+        (prim pg tt)
+        (fun (_: unit) (s: State V E) => 
+            I3 pg s).
+Proof.
+  intros.
+  unfold prim.
+  apply (Hoare_repeat_break (body_prim pg) 
+                            (fun (_: unit) (s0: State V E) => I2 pg s0 /\ I4 pg s0)
+                            (fun (_: unit) (s: State V E) => 
+                              I3 pg s)).
+  intros.
+  apply (break_with_I3 pg ).
+  apply H.
+Qed.
+
+Theorem prim_find_spanning_tree_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
+    graph_connected pg -> 
+    Hoare (fun s0 => I2 pg s0 /\ I4 pg s0)
+          (prim pg tt)
+          (fun (_: unit) (s: State V E) => 
+              is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
+Proof.
+  intros.
+  unfold is_spanning_tree.
+  pose proof (prim_find_tree_if_break_f pg H).
+  pose proof (prim_find_all_vertices_if_break_f pg H).
+  unfold I2 in H0,H1.
+  unfold I3 in H1.
+  unfold I2.
+  unfold Hoare.
+  unfold Hoare in H0, H1.
+  intros.
+  specialize (H0 σ1 a σ2).
+  specialize (H1 σ1 a σ2).
+  pose proof H0 H2 H3.
+  pose proof H1 H2 H3.
+  tauto.
+Qed.
+
+Lemma initial_state_to_I2 {V E: Type} (s: State V E):
+    forall (u: V) (pg: PreGraph V E),
+    pg.(vvalid) u ->
+    graph_connected pg -> 
+    s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil -> I2 pg s.
+Proof.
+  intros.
+  unfold I2.
+  unfold is_tree.
+  destruct H1 as [? ?].
+  rewrite H2.
+  rewrite H1.
+  simpl.
+  split; [ lia | ].
+  unfold graph_connected.
+  split.
+  + unfold is_legal_graph.
+    intros.
+    assert (~ {|
+      vertices := [u];
+      edges := [];
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |}.(evalid) e).
+    {
+      unfold evalid.
+      tauto. 
+    }
+    tauto.
+  +
+    intros.
+    unfold connected.
+    assert (In x [u]).
+    {
+      apply H3.
+    }
+    assert (In y [u]).
+    {
+      apply H4. 
+    }
+    assert (x = u).
+    {
+      simpl in H5.
+      destruct H5; [rewrite H5 ; reflexivity| tauto].
+    }
+    assert (y = u).
+    {
+      simpl in H6.
+      destruct H6; [rewrite H6 ; reflexivity| tauto].
+    }
+    subst.
+    reflexivity.
+Qed.
 
 
 Theorem prim_find_spanning_tree_if_break {V E: Type}:
@@ -935,8 +1212,18 @@ Theorem prim_find_spanning_tree_if_break {V E: Type}:
               is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
 Proof.
   intros.
-  unfold prim.
-Admitted.
+  unfold Hoare.
+  pose proof (prim_find_spanning_tree_if_break_f pg H0).
+  unfold Hoare in H1.
+  intros σ1 a σ2.
+  specialize (H1 σ1 a σ2).
+  pose proof (initial_state_to_I2 σ1 u pg).
+  pose proof H2 H H0.
+  intros.
+  pose proof (H3 H4).
+  pose proof (H1 H6 H5).
+  tauto.
+Qed.
 
 
 
