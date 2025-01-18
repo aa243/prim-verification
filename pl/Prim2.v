@@ -116,6 +116,8 @@ Definition list_to_set {V: Type} (l: list V): V -> Prop :=
 Definition graph_connected {V E: Type} (pg: PreGraph V E): Prop := 
   is_legal_graph pg /\ (forall x y, pg.(vvalid) x -> pg.(vvalid) y -> connected pg x y).
 
+
+(* connected x y -> connected y x *)
 Theorem connected_symmetric {V E: Type}:
   forall (pg: PreGraph V E) x y, connected pg x y -> connected pg y x.
 Proof.
@@ -152,6 +154,7 @@ Proof.
   * tauto.
 Qed.
 
+(* 子图中x,y连通，则大图中x,y连通 *)
 Theorem connected_in_subgraph_then_connected_in_graph {V E: Type}:
   forall (subg pg: PreGraph V E) x y, subgraph subg pg -> connected subg x y -> connected pg x y.
 Proof.
@@ -414,6 +417,7 @@ split.
 Qed.
 
 (* Level 1 *)
+(* 辅助工具用来解析Hoare *)
 Theorem Hoare_get_any_edge_in_edge_candidates {V E: Type}:
   forall (pg: PreGraph V E) (P: State V E -> Prop),
   Hoare P (get_any_edge_in_edge_candidates pg) (fun e s => set_of_the_edges_want_to_add pg s e /\ P s).
@@ -427,6 +431,7 @@ Proof.
 Qed.
 
 (* Level 1 *)
+(* 辅助工具用来解析Hoare *)
 Theorem Hoare_get_any_vertex_in_vertex_candidates {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (P: State V E -> Prop),
   Hoare P (get_any_vertex_in_vertex_candidates pg e) (fun v s => set_of_the_vertices_want_to_add pg s e v /\ P s).
@@ -440,6 +445,7 @@ Proof.
 Qed.
 
 (* Level 1 *)
+(* 每一步选出来的图都是合法的 *)
 Theorem keep_chosen_graph_legal {V E: Type}:
   forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V),
   graph_connected pg -> 
@@ -462,9 +468,102 @@ Theorem keep_chosen_graph_legal {V E: Type}:
     weight := pg.(weight)
   |}.
 Proof.
-Admitted.
+intros.
+unfold set_of_the_edges_want_to_add in H0.
+unfold graph_connected in H.
+destruct H as [H L].
+clear L.
+destruct H0.
+clear H5.
+unfold set_of_adjacent_edge_to_taken in H0.
+destruct H0.
+unfold set_of_the_vertices_want_to_add in H1.
+assert (In v σ2.(vertex_taken)).
+{ rewrite H2. simpl. tauto. }
+assert (In e σ2.(edge_taken)).
+{ rewrite H3. simpl. tauto. }
+unfold is_legal_graph.
+intros.
+change ({|
+  vertices := σ2.(vertex_taken);
+  edges := σ2.(edge_taken);
+  src := pg.(src);
+  dst := pg.(dst);
+  weight := pg.(weight)
+|}.(evalid) e0) with (In e0 σ2.(edge_taken)) in H8.
+rewrite H3 in H8.
+simpl in H8.
+change ({|
+  vertices := σ2.(vertex_taken);
+  edges := σ2.(edge_taken);
+  src := pg.(src);
+  dst := pg.(dst);
+  weight := pg.(weight)
+  |}.(vvalid)
+  ({|
+     vertices := σ2.(vertex_taken);
+     edges := σ2.(edge_taken);
+     src := pg.(src);
+     dst := pg.(dst);
+     weight := pg.(weight)
+   |}.(src) e0)) with (In (pg.(src) e0) σ2.(vertex_taken)).
+change ({|
+  vertices := σ2.(vertex_taken);
+  edges := σ2.(edge_taken);
+  src := pg.(src);
+  dst := pg.(dst);
+  weight := pg.(weight)
+  |}.(vvalid)
+  ({|
+     vertices := σ2.(vertex_taken);
+     edges := σ2.(edge_taken);
+     src := pg.(src);
+     dst := pg.(dst);
+     weight := pg.(weight)
+   |}.(dst) e0)) with (In (pg.(dst) e0) σ2.(vertex_taken)).
+   unfold is_legal_graph in H4.
+destruct H8.
+* subst e0.
+  destruct H5.
+  + destruct H5.
+    destruct H1; [tauto |].
+    destruct H1.
+    split.
+    ++ rewrite H2.
+       simpl.
+       tauto.
+    ++ rewrite H2, H1.
+        simpl.
+        tauto.
+  + destruct H5.
+    destruct H1; [ | tauto].
+    destruct H1.
+    split.
+    ++ rewrite H2, H1.
+       simpl.
+       tauto.
+    ++ rewrite H2.
+        simpl.
+        tauto. 
+* destruct H5.
+  + destruct H5.
+    destruct H1; [ tauto | ].
+    destruct H1.
+    specialize (H4 e0 H8).
+    rewrite H2.
+    simpl.
+    tauto.
+  + destruct H5.
+    destruct H1; [ | tauto].
+    destruct H1.
+    specialize (H4 e0 H8).
+    rewrite H2.
+    simpl.
+    tauto. 
+Qed.
 
 (* Level 1 *)
+(* 每一步新加的v与选出来的点用选的边连通 *)
 Lemma vertices_candidate_is_connected {V E: Type}:
   (* v是candiate， u是任意一点，u和v是连通的。 *)
   forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V) (u: V),
@@ -777,6 +876,7 @@ Proof.
 Qed.
 
 (* Level 1 *)
+(* 要求一的命题：每次选的都是一棵树 *)
 Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
   graph_connected pg ->
