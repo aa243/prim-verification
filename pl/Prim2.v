@@ -274,6 +274,42 @@ Proof.
     * reflexivity.
 Qed.
 
+Theorem connected_symmetric {V E: Type}:
+ forall (pg: PreGraph V E) x y, connected pg x y -> connected pg y x.
+Proof.
+ unfold connected.
+ intros.
+ induction_1n H.
+ + reflexivity.
+ + assert (step pg x0 x).
+  {
+  unfold step in H0.
+   unfold step.
+   destruct H0 as [e ?].
+  exists e.
+  destruct H0.
+  + right.
+  destruct H0.
+  split.
+  - tauto.
+  - tauto.
+  - tauto.
+  - tauto.
+  - tauto.
+  + left.
+  destruct H0.
+  split.
+  - tauto.
+  - tauto.
+  - tauto.
+  - tauto.
+  - tauto.
+  }
+ transitivity_n1 x0.
+ * tauto.
+ * tauto.
+Qed.
+
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
     length el + 1 = length vl /\
     graph_connected (Build_PreGraph V E vl el pg.(src) pg.(dst) pg.(weight)).
@@ -441,14 +477,30 @@ Theorem keep_I4 {V E: Type} (pg: PreGraph V E):
 Proof.
 Admitted.
 
-
-
-(* 选的图永远是legal的 *)
-(* Theorem the_graph_chosen_is_always_legal {V E: Type} (pg: PreGraph V E):
-  forall  .
+Theorem keep_chosen_graph_legal {V E: Type}:
+  forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V),
+  graph_connected pg -> 
+  set_of_the_edges_want_to_add pg σ1 e ->
+  set_of_the_vertices_want_to_add pg σ1 e v ->
+  σ2.(vertex_taken) = v :: σ1.(vertex_taken) ->
+  σ2.(edge_taken) = e :: σ1.(edge_taken) ->
+  is_legal_graph {|
+    vertices := σ1.(vertex_taken);
+    edges := σ1.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |} ->
+  is_legal_graph {|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |}.
 Proof.
-  
-Qed. *)
+Admitted.
+
 
 Lemma vertices_candidate_is_connected {V E: Type}:
   (* v是candiate， u是任意一点，u和v是连通的。 *)
@@ -470,6 +522,7 @@ Lemma vertices_candidate_is_connected {V E: Type}:
   |} v u.
 Proof.
   intros.
+  unfold set_of_the_edges_want_to_add in H0.
   unfold graph_connected in H.
   destruct H as [H L].
   unfold connected.
@@ -506,73 +559,354 @@ Proof.
   simpl in H5.
   destruct H5.
   * rewrite H5; reflexivity.
-  * destruct H1.
+  * destruct H7.
+   destruct H1.
     - destruct H1.
+      destruct H6; [ tauto | ].
+      destruct H6 as [H6 M]. 
+      assert (is_legal_graph
+      {|
+        vertices := σ2.(vertex_taken);
+        edges := σ2.(edge_taken);
+        src := pg.(src);
+        dst := pg.(dst);
+        weight := pg.(weight)
+      |}).
+      { rewrite H3.
+        unfold is_legal_graph in *.
+        intros.
+        change ({|
+          vertices := σ2.(vertex_taken);
+          edges := e :: σ1.(edge_taken);
+          src := pg.(src);
+          dst := pg.(dst);
+          weight := pg.(weight)
+        |}.(evalid) e0) with (In e0 (e :: σ1.(edge_taken))) in H13.
+        simpl in H13.
+        destruct H13.
+        ++ subst e0.
+            split.
+            ** rewrite <- H3.
+                rewrite <- H9.
+                change ({|
+                  vertices := σ2.(vertex_taken);
+                  edges := σ2.(edge_taken);
+                  src := pg.(src);
+                  dst := pg.(dst);
+                  weight := pg.(weight)
+                |}.(vvalid) (pg.(src) e)) with (In (pg.(src) e) σ2.(vertex_taken)).
+                rewrite H1.
+                tauto.
+            ** rewrite <- H3.
+                rewrite <- H10.
+                change ({|
+                  vertices := σ2.(vertex_taken);
+                  edges := σ2.(edge_taken);
+                  src := pg.(src);
+                  dst := pg.(dst);
+                  weight := pg.(weight)
+                |}.(vvalid) (pg.(dst) e)) with (In (pg.(dst) e) σ2.(vertex_taken)).
+                rewrite H2.
+                simpl; right.
+                tauto.
+        ++ split.
+           ** rewrite <- H3.
+              rewrite <- H9.
+              change ({|
+                vertices := σ2.(vertex_taken);
+                edges := σ2.(edge_taken);
+                src := pg.(src);
+                dst := pg.(dst);
+                weight := pg.(weight)
+              |}.(vvalid) (pg.(src) e0)) with (In (pg.(src) e0) σ2.(vertex_taken)).
+              rewrite H2.
+              simpl; right.
+              specialize (H7 e0 H13).
+              tauto.
+            ** rewrite <- H3.
+              rewrite <- H10.
+              change ({|
+                vertices := σ2.(vertex_taken);
+                edges := σ2.(edge_taken);
+                src := pg.(src);
+                dst := pg.(dst);
+                weight := pg.(weight)
+              |}.(vvalid) (pg.(dst) e0)) with (In (pg.(dst) e0) σ2.(vertex_taken)).
+              rewrite H2.
+              simpl; right.
+              specialize (H7 e0 H13).
+              tauto. }
       transitivity_1n (pg.(dst) e).
       + rewrite <- H1.
         rewrite H9, H10.
         apply (step_on_one_edge _ e); [ | apply H8].
-        Admitted.
-      (* + specialize (H6 (pg.(dst) e) u).
-        destruct H5.
-        ** destruct H5.
-           tauto.
-        ** destruct H5.
-           specialize (H6 H5 H10). *)
-            
+        rewrite <- H10.
+        rewrite <- H9.
+        tauto.
+      + specialize (H11 (pg.(dst) e) u H6 H5).
+        change (clos_refl_trans
+        (step
+           {|
+             vertices := σ2.(vertex_taken);
+             edges := σ2.(edge_taken);
+             src := pg.(src);
+             dst := pg.(dst);
+             weight := pg.(weight)
+           |}) (pg.(dst) e) u) with (connected {|
+             vertices := σ2.(vertex_taken);
+             edges := σ2.(edge_taken);
+             src := pg.(src);
+             dst := pg.(dst);
+             weight := pg.(weight)
+            |} (pg.(dst) e) u).
+          apply (connected_in_subgraph_then_connected_in_graph {|
+            vertices := σ1.(vertex_taken);
+            edges := σ1.(edge_taken);
+            src := pg.(src);
+            dst := pg.(dst);
+            weight := pg.(weight)
+          |} _ (pg.(dst) e) u); [ | apply H11].
+          split; [ apply H7 | apply H13 | sets_unfold; rewrite H2; simpl | sets_unfold; rewrite H3; simpl | intros; reflexivity | intros; reflexivity].
+          ++ intros.
+            change ({|
+              vertices := v :: σ1.(vertex_taken);
+              edges := σ2.(edge_taken);
+              src := pg.(src);
+              dst := pg.(dst);
+              weight := pg.(weight)
+            |}.(vvalid) a) with (In a (v :: σ1.(vertex_taken))).
+            simpl; tauto.
+          ++ intros.
+            change ({|
+              vertices := σ2.(vertex_taken);
+              edges := e :: σ1.(edge_taken);
+              src := pg.(src);
+              dst := pg.(dst);
+              weight := pg.(weight)
+            |}.(evalid) a) with (In a (e :: σ1.(edge_taken))).
+            simpl; tauto.
+    - destruct H1.
+      destruct H6; [ | tauto ].
+      destruct H6 as [H6 M]. 
+      assert (is_legal_graph
+      {|
+        vertices := σ2.(vertex_taken);
+        edges := σ2.(edge_taken);
+        src := pg.(src);
+        dst := pg.(dst);
+        weight := pg.(weight)
+      |}).
+      { rewrite H3.
+      unfold is_legal_graph in *.
+      intros.
+      change ({|
+        vertices := σ2.(vertex_taken);
+        edges := e :: σ1.(edge_taken);
+        src := pg.(src);
+        dst := pg.(dst);
+        weight := pg.(weight)
+      |}.(evalid) e0) with (In e0 (e :: σ1.(edge_taken))) in H13.
+      simpl in H13.
+      destruct H13.
+      ++ subst e0.
+          split.
+          ** rewrite <- H3.
+              rewrite <- H9.
+              change ({|
+                vertices := σ2.(vertex_taken);
+                edges := σ2.(edge_taken);
+                src := pg.(src);
+                dst := pg.(dst);
+                weight := pg.(weight)
+              |}.(vvalid) (pg.(src) e)) with (In (pg.(src) e) σ2.(vertex_taken)).
+              rewrite H2.
+              simpl; right.
+              tauto.
+          ** rewrite <- H3.
+              rewrite <- H10.
+              change ({|
+                vertices := σ2.(vertex_taken);
+                edges := σ2.(edge_taken);
+                src := pg.(src);
+                dst := pg.(dst);
+                weight := pg.(weight)
+              |}.(vvalid) (pg.(dst) e)) with (In (pg.(dst) e) σ2.(vertex_taken)).
+              rewrite H1.
+              tauto.
+              ++ split.
+              ** rewrite <- H3.
+                 rewrite <- H9.
+                 change ({|
+                   vertices := σ2.(vertex_taken);
+                   edges := σ2.(edge_taken);
+                   src := pg.(src);
+                   dst := pg.(dst);
+                   weight := pg.(weight)
+                 |}.(vvalid) (pg.(src) e0)) with (In (pg.(src) e0) σ2.(vertex_taken)).
+                 rewrite H2.
+                 simpl; right.
+                 specialize (H7 e0 H13).
+                 tauto.
+               ** rewrite <- H3.
+                 rewrite <- H10.
+                 change ({|
+                   vertices := σ2.(vertex_taken);
+                   edges := σ2.(edge_taken);
+                   src := pg.(src);
+                   dst := pg.(dst);
+                   weight := pg.(weight)
+                 |}.(vvalid) (pg.(dst) e0)) with (In (pg.(dst) e0) σ2.(vertex_taken)).
+                 rewrite H2.
+                 simpl; right.
+                 specialize (H7 e0 H13).
+                 tauto. }
+      transitivity_1n (pg.(src) e).
+      + rewrite <- H1.
+        apply step_symmetric.
+        rewrite H9, H10.
+        apply (step_on_one_edge _ e); [ | apply H8 ].
+        rewrite <- H10.
+        rewrite <- H9.
+        tauto.
+      + specialize (H11 (pg.(src) e) u H6 H5).
+        change (clos_refl_trans
+        (step
+          {|
+            vertices := σ2.(vertex_taken);
+            edges := σ2.(edge_taken);
+            src := pg.(src);
+            dst := pg.(dst);
+            weight := pg.(weight)
+          |}) (pg.(src) e) u) with (connected {|
+            vertices := σ2.(vertex_taken);
+            edges := σ2.(edge_taken);
+            src := pg.(src);
+            dst := pg.(dst);
+            weight := pg.(weight)
+            |} (pg.(src) e) u).
+          apply (connected_in_subgraph_then_connected_in_graph {|
+            vertices := σ1.(vertex_taken);
+            edges := σ1.(edge_taken);
+            src := pg.(src);
+            dst := pg.(dst);
+            weight := pg.(weight)
+          |} _ (pg.(src) e) u); [ | apply H11].
+          split; [ apply H7 | apply H13 | sets_unfold; rewrite H2; simpl | sets_unfold; rewrite H3; simpl | intros; reflexivity | intros; reflexivity].
+          ++ intros.
+            change ({|
+              vertices := v :: σ1.(vertex_taken);
+              edges := σ2.(edge_taken);
+              src := pg.(src);
+              dst := pg.(dst);
+              weight := pg.(weight)
+            |}.(vvalid) a) with (In a (v :: σ1.(vertex_taken))).
+            simpl; tauto.
+          ++ intros.
+            change ({|
+              vertices := σ2.(vertex_taken);
+              edges := e :: σ1.(edge_taken);
+              src := pg.(src);
+              dst := pg.(dst);
+              weight := pg.(weight)
+            |}.(evalid) a) with (In a (e :: σ1.(edge_taken))).
+            simpl; tauto.
+  
+Qed.
 
 Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
+  graph_connected pg ->
   Hoare
   (fun s : State V E =>
    set_of_the_vertices_want_to_add pg s e v /\
    set_of_the_edges_want_to_add pg s e /\
    ~ list_to_set s.(vertex_taken) == pg.(vvalid) /\
-   is_tree pg s.(vertex_taken) s.(edge_taken)
-   /\ I4 pg s)
+   is_tree pg s.(vertex_taken) s.(edge_taken))
   (add_the_edge_and_the_vertex pg e v)
-  (fun _ s => is_tree pg s.(vertex_taken) s.(edge_taken) /\ I4 pg s).
+  (fun _ s => is_tree pg s.(vertex_taken) s.(edge_taken)).
 Proof.
   intros.
   unfold Hoare, add_the_edge_and_the_vertex.
-  intros.
-  destruct H.
+  intros; clear a.
   destruct H1.
-  destruct H2.
   destruct H0.
-  unfold is_tree.
+  destruct H3.
+  destruct H3.
+  pose proof H5 as L.
+  clear H5.
+  destruct H4. 
+  unfold is_tree in *.
+  destruct H5.
   split.
-  + 
+  + rewrite H1, H2.
+    simpl.
+    rewrite H5.
+    lia.
+  + unfold graph_connected.
     split.
-    * rewrite H0, H4.
-      simpl.
-      destruct H3.
-      unfold is_tree in H3.
-      destruct H3.
-      rewrite H3.
-      lia.
-    * unfold graph_connected.
-      split.
+    **
+    apply (keep_chosen_graph_legal pg σ1 σ2 e v); [tauto | unfold set_of_the_edges_want_to_add; tauto | tauto | tauto | tauto | unfold graph_connected in H6; tauto]. 
+    ** intros.
+       change ({|
+        vertices := σ2.(vertex_taken);
+        edges := σ2.(edge_taken);
+        src := pg.(src);
+        dst := pg.(dst);
+        weight := pg.(weight)
+      |}.(vvalid) x) with (In x σ2.(vertex_taken)) in H7.
+        change ({|
+          vertices := σ2.(vertex_taken);
+          edges := σ2.(edge_taken);
+          src := pg.(src);
+          dst := pg.(dst);
+          weight := pg.(weight)
+        |}.(vvalid) y) with (In y σ2.(vertex_taken)) in H8.
+        rewrite H1 in H7.
+        rewrite H1 in H8.
+        simpl in H7, H8.
+        destruct H7, H8.
+        ++ subst; reflexivity.
+        ++ subst x.
+            apply (vertices_candidate_is_connected pg σ1 σ2 e v y); [tauto | unfold set_of_the_edges_want_to_add; tauto | tauto | tauto | tauto | unfold is_tree; tauto | rewrite H1; simpl; right; tauto].
+        ++ subst y.
+          apply (connected_symmetric _ v x).
+          apply (vertices_candidate_is_connected pg σ1 σ2 e v x); [tauto | unfold set_of_the_edges_want_to_add; tauto | tauto | tauto | tauto | unfold is_tree; tauto | rewrite H1; simpl; right; tauto].
+        ++ destruct H6.
+        apply (connected_in_subgraph_then_connected_in_graph {|
+          vertices := σ1.(vertex_taken);
+          edges := σ1.(edge_taken);
+          src := pg.(src);
+          dst := pg.(dst);
+          weight := pg.(weight)
+        |} _ x y).
+          -- split; [ tauto | 
+          apply (keep_chosen_graph_legal pg σ1 σ2 e v); [tauto | unfold set_of_the_edges_want_to_add; tauto | tauto | tauto | tauto | unfold graph_connected in H6; tauto]
+          | sets_unfold; rewrite H1; simpl | sets_unfold; rewrite H2; simpl | intros | intros ].
+            +++ intros.
+              change ({|
+                vertices := v :: σ1.(vertex_taken);
+                edges := σ2.(edge_taken);
+                src := pg.(src);
+                dst := pg.(dst);
+                weight := pg.(weight)
+              |}.(vvalid) a) with (In a (v :: σ1.(vertex_taken))).
+              simpl; tauto.
+            +++ intros.
+              change ({|
+                vertices := σ2.(vertex_taken);
+                edges := e :: σ1.(edge_taken);
+                src := pg.(src);
+                dst := pg.(dst);
+                weight := pg.(weight)
+              |}.(evalid) a) with (In a (e :: σ1.(edge_taken))).
+              simpl; tauto.
+            +++ reflexivity.
+            +++ reflexivity.
+          -- specialize (H9 x y H7 H8).
+            tauto.
+Qed.
 
-      (* intros x y ? ?.
-      assert (In x σ2.(vertex_taken)).
-      { apply H5. }
-      assert (In y σ2.(vertex_taken)).
-      { apply H6. }
-      rewrite H0 in H7.
-      rewrite H0 in H8.
-      simpl in H7.
-      simpl in H8.
-      destruct H7.
-      - subst x.
-        apply (vertices_candidate_is_connected _ σ1 σ2 e v y) ; [ tauto | tauto | tauto | tauto | tauto | tauto].
-      - destruct H8.
-        * subst y. *)
-        (* apply clos_refl_trans_sym_sym. *)
-      Admitted.
-      
-
-Lemma keep_I2_and_I4 {V E: Type} (pg: PreGraph V E):
+(* Lemma keep_I2_and_I4 {V E: Type} (pg: PreGraph V E):
 graph_connected pg -> 
 Hoare (fun s => I2 pg s /\ I4 pg s) 
       (body_prim pg tt)
@@ -582,26 +916,58 @@ Hoare (fun s => I2 pg s /\ I4 pg s)
           | by_break _ => I2 pg s /\ I4 pg s
           end).
 Proof.
-intros.
-unfold I2, body_prim.
-apply Hoare_choice.
-+ apply Hoare_test_bind.
   intros.
-  apply Hoare_ret'.
-  intros.
-  tauto.
-+ apply Hoare_test_bind.
-  eapply Hoare_bind.
-  * apply (Hoare_get_any_edge_in_edge_candidates pg _).
-  * intros e.
+  unfold I2, body_prim.
+  apply Hoare_choice.
+  + apply Hoare_test_bind.
+    intros.
+    apply Hoare_ret'.
+    intros.
+    tauto.
+  + apply Hoare_test_bind.
     eapply Hoare_bind.
-    ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
-    ++ intros v.
-        eapply Hoare_bind; [ | intros; apply Hoare_ret'].
-        +++ apply (Hoare_add_the_edge_and_the_vertex pg e v).
-        +++ intros. 
-            simpl in H0.
-            tauto.
+    * apply (Hoare_get_any_edge_in_edge_candidates pg _).
+    * intros e.
+      eapply Hoare_bind.
+      ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
+      ++ intros v.
+          eapply Hoare_bind; [ | intros; apply Hoare_ret'].
+          +++ apply (Hoare_add_the_edge_and_the_vertex pg e v).
+          +++ intros. 
+              simpl in H0.
+              tauto.
+Qed. *)
+
+Lemma keep_I2 {V E: Type} (pg: PreGraph V E):
+    graph_connected pg -> 
+    Hoare (fun s => I2 pg s) 
+          (body_prim pg tt)
+          (fun res (s: State V E) => 
+              match res with
+              | by_continue _ => I2 pg s
+              | by_break _ => I2 pg s
+              end).
+Proof.
+  intros.
+  unfold I2, body_prim.
+  apply Hoare_choice.
+  + apply Hoare_test_bind.
+    intros.
+    apply Hoare_ret'.
+    intros.
+    tauto.
+  + apply Hoare_test_bind.
+    eapply Hoare_bind.
+    * apply (Hoare_get_any_edge_in_edge_candidates pg _).
+    * intros e.
+      eapply Hoare_bind.
+      ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
+      ++ intros v.
+          eapply Hoare_bind; [ | intros; apply Hoare_ret'].
+          +++ apply (Hoare_add_the_edge_and_the_vertex pg e v).
+          +++ intros. 
+              simpl in H0.
+              tauto.
 Qed.
 
 Lemma break_with_I3 {V E: Type} (pg: PreGraph V E):
@@ -635,20 +1001,6 @@ Proof.
       unfold I2.
       tauto.
 Qed.
-    
-
-(* Lemma keep_I2 {V E: Type} (pg: PreGraph V E):
-    graph_connected pg -> 
-    Hoare (fun s => I2 pg s) 
-          (body_prim pg tt)
-          (fun res (s: State V E) => 
-              match res with
-              | by_continue _ => I2 pg s
-              | by_break _ => I2 pg s
-              end).
-Proof.
-Admitted. *)
-
 
 (* 设{x,y}是新选的边，x在已选的里，y不在。 如果{x,y}在原来的最小生成树中，什么也不用干
 如果不在，那么要修改这个最小生成树，要加上{x,y}，删掉一条边。
