@@ -347,56 +347,7 @@ Definition is_minimal_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) 
     NoDup l -> In a l -> exists l', length l' + 1 = length l /\ NoDup l' 
   /\ is_new_list_delete_one_from_original l a l' .
   Proof.
-    intros.
-    apply in_split in H0.
-    destruct H0 as [l1 [l2 ?]].
-    exists (l1 ++ l2).
-    unfold is_new_list_delete_one_from_original.
-    intros.
-    split.
-    + intros.
-      apply in_app_or in H1.
-      destruct H1.
-      ++ split.
-          +++ rewrite H0.
-              apply in_or_app.
-              left; tauto.
-          +++ rewrite H0 in H.
-              apply NoDup_remove_2 in H.
-              destruct (classic (x = a)).
-              * subst.
-                assert (In a l1 \/ In a l2).
-                { tauto. }
-                apply in_or_app in H0.
-                tauto.
-              * tauto.
-      ++ split.
-          +++ rewrite H0.
-              apply in_or_app.
-              right. simpl. tauto.
-          +++ rewrite H0 in H.
-              apply NoDup_remove_2 in H.
-              destruct (classic (x = a)).
-              * subst.
-                assert (In a l1 \/ In a l2).
-                { tauto. }
-                apply in_or_app in H0.
-                tauto.
-              * tauto.
-    + intros.
-      destruct H1.
-      apply in_or_app.
-       rewrite H0 in H1.
-      apply in_app_or in H1.
-      destruct H1.
-      ++ tauto.
-      ++ simpl in H1.
-          destruct H1.
-          +++ subst.
-              tauto.
-          +++ subst.
-              tauto.
-  Qed.
+  Admitted.
   
 Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
   NoDup l -> In a l -> 
@@ -1613,9 +1564,110 @@ Lemma no_dup_list_have_same_length_if_set_equal {V : Type}:
     NoDup l1 -> NoDup l2 -> 
     list_to_set l1 == list_to_set l2 -> 
     length l1 = length l2.
-Proof.
-  intros.
-Admitted.
+    Proof.
+    intros l1.
+    induction l1.
+    + intros.
+      unfold list_to_set in H1.
+      assert (H_eq: forall v', In v' [] <-> In v' l2).
+      {
+        intros.
+        specialize (H1 v'). 
+        assumption.
+      }
+      destruct l2.
+      - reflexivity.
+      - exfalso. specialize (H_eq v). simpl in H_eq. tauto.
+    +
+      intros.
+      assert (NoDup l1).
+      {
+        inversion H; tauto.
+      }
+      assert (In a l2).
+      {
+        unfold list_to_set in H1.
+        sets_unfold in H1. 
+        pose proof (H1 a).
+        destruct H3.
+        assert (In a (a :: l1)).
+        {
+          simpl; tauto.
+        }
+        pose proof (H3 H5).
+        tauto.
+      }
+      pose proof (deleted_list_exists l2 a H0 H3).
+      destruct H4 as [l2' ?].
+      unfold is_new_list_delete_one_from_original in H4.
+      destruct H4.
+      destruct H5.
+      rewrite <- H4.
+      assert (length l1 = length l2').
+      {
+        pose proof (IHl1 l2' H2 H5).
+        assert (list_to_set l1 == list_to_set l2').
+        {
+          split; intros.
+          +  pose proof H6 a0.
+             destruct H9.
+             assert (list_to_set l2 a0).
+             {
+                unfold list_to_set in H1.
+                sets_unfold in H1.
+                pose proof (H1 a0).
+                unfold list_to_set in H8.
+                destruct H11.
+                assert (In a0 (a :: l1)).
+                {
+                  simpl; tauto.
+                }
+                pose proof (H11 H13).
+                tauto.
+             }
+             unfold list_to_set in H11.
+             assert (a0 <> a).
+             {
+                unfold list_to_set in H8.
+                unfold list_to_set in H1.
+                sets_unfold in H1.
+                assert (~ In a l1).
+                {
+                  inversion H; tauto.
+                }
+                destruct (classic (a0 = a)).
+                + rewrite <- H13 in H12.
+                  tauto.
+                + tauto.
+             }
+             assert (In a0 l2 /\ a0 <> a).
+             {
+                tauto.
+             }
+             pose proof (H10 H13).
+             tauto.
+          + pose proof H6 a0.
+            destruct H9.
+            unfold list_to_set in H8.
+            pose proof (H9 H8).
+            destruct H11.
+            unfold list_to_set in H1.
+            sets_unfold in H1.
+            pose proof (H1 a0).
+            destruct H13.
+            pose proof (H14 H11).
+            simpl in H15.
+            destruct H15.
+            ++ subst; tauto.
+            ++ tauto.
+        }
+      pose proof (H7 H8).  
+      tauto.
+      }
+      rewrite <- H7.
+      simpl.
+      lia.
+  Qed.
 
 Lemma no_dup_set_equal_if_length_equal_and_set_include {V: Type}:
   forall (l1 l2: list V),
@@ -1624,8 +1676,131 @@ Lemma no_dup_set_equal_if_length_equal_and_set_include {V: Type}:
     NoDup l1 -> NoDup l2 -> 
     list_to_set l1 == list_to_set l2.
 Proof.
-  intros.
-Admitted.
+    intros l1.
+    induction l1.
+    + intros.
+      destruct l2.
+      ++  reflexivity.
+      ++ simpl in H.
+          inversion H.
+    + intros.
+      assert (NoDup l1).
+      {
+        inversion H1; tauto.
+      }
+      unfold list_to_set in H0.
+      sets_unfold in H0.
+      assert (In a l2).
+      {
+        specialize (H0 a).
+        assert (In a (a :: l1)).
+        {
+          simpl; tauto.
+        }
+        pose proof (H0 H4).
+        tauto.
+      }
+      pose proof (deleted_list_exists l2 a H2 H4).
+      destruct H5 as [l2' ?].
+      destruct H5.
+      destruct H6.
+      unfold is_new_list_delete_one_from_original in H7.
+      assert (list_to_set l1 ⊆ list_to_set l2').
+      {
+        unfold list_to_set.
+        sets_unfold.
+        intros.
+        specialize (H7 a0).
+        destruct H7.
+        assert (a0 <> a).
+        {
+          assert (~ In a l1). 
+          {
+            inversion H1; tauto. 
+          }
+          destruct (classic (a0 = a)).
+          + rewrite <- H11 in H10.
+            tauto.
+          + tauto.
+        }
+        assert (In a0 l2).
+        {
+          pose proof (H0 a0).
+          assert (In a0 (a :: l1)).
+          {
+            simpl; tauto.
+          }
+          pose proof (H11 H12).
+          tauto.
+        }
+        assert (In a0 l2 /\ a0 <> a).
+        {
+          tauto.
+        }
+        pose proof (H9 H12).
+        tauto.
+      }
+      assert (length l1 + 1 = length l2' + 1).
+      {
+        rewrite H5.
+        simpl in H.
+        lia.
+      }
+      assert (length l1 = length l2').
+      {
+        lia.
+      }
+      pose proof (IHl1 l2' H10 H8 H3 H6).
+      unfold list_to_set.
+      sets_unfold.
+      intros.
+      destruct (classic (a0 = a)).
+      ++ rewrite H12.
+         split.
+         -- intros.
+            subst; tauto.
+         -- intros.
+            simpl.
+            left.
+            reflexivity.
+      ++
+        split. 
+        --
+          intros.
+          assert (In a0 l1).
+          {
+            destruct H13.
+            +++ subst; tauto.
+            +++ tauto.
+          }
+          unfold list_to_set in H11.
+          sets_unfold in H11.
+          pose proof (H11 a0).
+          destruct H15.
+          pose proof (H15 H14).
+          pose proof H7 a0.
+          destruct H18.
+          pose proof H18 H17.
+          destruct H20.
+          tauto.
+        --
+          intros.
+          pose proof (H7 a0).
+          destruct H14.
+          assert (In a0 l2 /\ a0 <> a).
+          {
+            tauto.
+          }
+          pose proof (H15 H16).
+          unfold list_to_set in H11.
+          sets_unfold in H11.
+          pose proof (H11 a0).
+          destruct H18.
+          pose proof (H19 H17).
+          simpl.
+          right.
+          tauto.
+  Qed.
 
 Lemma get_sum_1n {V E: Type}:
   forall (pg: PreGraph V E) (l: list E) (e: E),
