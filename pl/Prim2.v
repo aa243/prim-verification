@@ -1153,7 +1153,12 @@ Proof.
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Qed. *)
 
-Theorem : .
+Theorem intermediate_point_between_x_and_y {V E: Type}:
+  forall (pg: PreGraph V E) (σ1: State V E) (e: E) (v: V),
+    graph_connected pg ->
+    set_of_the_vertices_want_to_add pg σ1 e v ->
+    set_of_the_edges_want_to_add pg σ1 e -> 
+    .
 Proof.
   
 Qed.
