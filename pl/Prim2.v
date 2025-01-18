@@ -1,6 +1,7 @@
 Require Import Coq.Lists.List.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.Classes.RelationClasses.
+Require Import Coq.Logic.Classical.
 From SetsClass Require Import SetsClass.
 Import SetsNotation.
 Local Open Scope sets_scope.
@@ -54,6 +55,7 @@ Notation "pg '.(vvalid)'" := (vvalid  pg) (at level 1).
 Notation "pg '.(evalid)'" := (evalid pg) (at level 1).
 
 Definition is_legal_graph {V E: Type} (pg: PreGraph V E): Prop :=
+  NoDup pg.(vertices) /\ NoDup pg.(edges) /\
   forall e, pg.(evalid) e -> (pg.(vvalid) (pg.(src) e) /\ pg.(vvalid) (pg.(dst) e)).
 
 Record step_aux {V E: Type} (pg: PreGraph V E) (e: E) (x y: V): Prop :=
@@ -94,8 +96,10 @@ Proof.
   exists e.
   left.
   unfold is_legal_graph in H.
-  specialize (H e H0).
   destruct H.
+  destruct H1.
+  specialize (H2 e H0).
+  destruct H2.
   constructor; auto.
 Qed.
 
@@ -359,6 +363,9 @@ Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
 Definition I3 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   list_to_set s.(vertex_taken) == pg.(vvalid).
 
+(* Lemma Nodup_empty_list:
+  NoDup []%list. *)
+
 (* Level 1 *)
 (* 初始状态满足 I2 *)
 Lemma initial_state_to_I2 {V E: Type} (s: State V E):
@@ -378,6 +385,8 @@ split; [ lia | ].
 unfold graph_connected.
 split.
 + unfold is_legal_graph.
+  intros.
+  split; [ | split];[  simpl; apply NoDup_cons | simpl; apply NoDup_nil | ]; [ simpl; tauto| apply NoDup_nil |].
   intros.
   assert (~ {|
     vertices := [u];
@@ -483,84 +492,182 @@ assert (In v σ2.(vertex_taken)).
 assert (In e σ2.(edge_taken)).
 { rewrite H3. simpl. tauto. }
 unfold is_legal_graph.
-intros.
-change ({|
-  vertices := σ2.(vertex_taken);
-  edges := σ2.(edge_taken);
-  src := pg.(src);
-  dst := pg.(dst);
-  weight := pg.(weight)
-|}.(evalid) e0) with (In e0 σ2.(edge_taken)) in H8.
-rewrite H3 in H8.
-simpl in H8.
-change ({|
-  vertices := σ2.(vertex_taken);
-  edges := σ2.(edge_taken);
-  src := pg.(src);
-  dst := pg.(dst);
-  weight := pg.(weight)
-  |}.(vvalid)
-  ({|
-     vertices := σ2.(vertex_taken);
-     edges := σ2.(edge_taken);
-     src := pg.(src);
-     dst := pg.(dst);
-     weight := pg.(weight)
-   |}.(src) e0)) with (In (pg.(src) e0) σ2.(vertex_taken)).
-change ({|
-  vertices := σ2.(vertex_taken);
-  edges := σ2.(edge_taken);
-  src := pg.(src);
-  dst := pg.(dst);
-  weight := pg.(weight)
-  |}.(vvalid)
-  ({|
-     vertices := σ2.(vertex_taken);
-     edges := σ2.(edge_taken);
-     src := pg.(src);
-     dst := pg.(dst);
-     weight := pg.(weight)
-   |}.(dst) e0)) with (In (pg.(dst) e0) σ2.(vertex_taken)).
-   unfold is_legal_graph in H4.
-destruct H8.
-* subst e0.
-  destruct H5.
-  + destruct H5.
-    destruct H1; [tauto |].
+split.
++ simpl.
+  unfold is_legal_graph in H.
+  destruct H.
+  unfold is_legal_graph in H4.
+  destruct H4.
+  simpl in H4.
+  destruct H1.
+    * destruct H5.
+      **  destruct H5.
+          destruct H1.
+          rewrite H1 in H5. 
+          tauto.
+      **  destruct H5. 
+          destruct H1.
+          rewrite H1 in H10.
+          rewrite H2.
+          apply NoDup_cons.
+          -- tauto.
+          -- tauto.
+    * destruct H5.
+      **  destruct H5.
+          destruct H1.
+          rewrite H1 in H10.
+          rewrite H2.
+          apply NoDup_cons.
+          -- tauto.
+          -- tauto. 
+      **  destruct H5. 
+          destruct H1.
+          rewrite H1 in H5.
+          rewrite H2.
+          apply NoDup_cons.
+          -- tauto.
+          -- tauto.
++ split.
+  - simpl.
+    unfold is_legal_graph in H.
+    destruct H.
+    destruct H8.
+    unfold is_legal_graph in H4.
+    destruct H4.
+    destruct H10.
+    simpl in H10.
     destruct H1.
-    split.
-    ++ rewrite H2.
-       simpl.
-       tauto.
-    ++ rewrite H2, H1.
+    ++
+      destruct H5.
+      ** destruct H5.
+         destruct H1.
+         rewrite H1 in H5.
+         tauto.
+      ** destruct H5.
+         destruct H1.
+         change ({|
+         vertices := σ1.(vertex_taken);
+         edges := σ1.(edge_taken);
+         src := pg.(src);
+         dst := pg.(dst);
+         weight := pg.(weight)
+       |}.(vertices)) with (σ1.(vertex_taken)) in H4.
+       rewrite H3.
+       apply NoDup_cons;[ | tauto ].
+       destruct 
+       (classic (In e σ1.(edge_taken))).
+       *** 
+           specialize (H11 e H14).
+           destruct H11.
+           tauto.
+       *** tauto.
+    ++ destruct H5.
+      **  destruct H5.
+         destruct H1.
+         change ({|
+         vertices := σ1.(vertex_taken);
+         edges := σ1.(edge_taken);
+         src := pg.(src);
+         dst := pg.(dst);
+         weight := pg.(weight)
+       |}.(vertices)) with (σ1.(vertex_taken)) in H4.
+       rewrite H3.
+       apply NoDup_cons;[ | tauto ].
+       destruct 
+       (classic (In e σ1.(edge_taken))).
+       *** 
+           specialize (H11 e H14).
+           destruct H11.
+           tauto.
+       *** tauto.
+      ** destruct H5.
+         destruct H1.
+         rewrite H1 in H5.
+         tauto.
+  -
+  intros.
+  change ({|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |}.(evalid) e0) with (In e0 σ2.(edge_taken)) in H8.
+  rewrite H3 in H8.
+  simpl in H8.
+  change ({|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+    |}.(vvalid)
+    ({|
+      vertices := σ2.(vertex_taken);
+      edges := σ2.(edge_taken);
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |}.(src) e0)) with (In (pg.(src) e0) σ2.(vertex_taken)).
+  change ({|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+    |}.(vvalid)
+    ({|
+      vertices := σ2.(vertex_taken);
+      edges := σ2.(edge_taken);
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |}.(dst) e0)) with (In (pg.(dst) e0) σ2.(vertex_taken)).
+    unfold is_legal_graph in H4.
+  destruct H8.
+  *** subst e0.
+    destruct H5.
+    +++ destruct H5.
+      destruct H1; [tauto |].
+      destruct H1.
+      split.
+      ++++ rewrite H2.
         simpl.
         tauto.
-  + destruct H5.
-    destruct H1; [ | tauto].
-    destruct H1.
-    split.
-    ++ rewrite H2, H1.
-       simpl.
-       tauto.
-    ++ rewrite H2.
+      ++++ rewrite H2, H1.
+          simpl.
+          tauto.
+    +++ destruct H5.
+      destruct H1; [ | tauto].
+      destruct H1.
+      split.
+      ++++ rewrite H2, H1.
         simpl.
-        tauto. 
-* destruct H5.
-  + destruct H5.
-    destruct H1; [ tauto | ].
-    destruct H1.
-    specialize (H4 e0 H8).
-    rewrite H2.
-    simpl.
-    tauto.
-  + destruct H5.
-    destruct H1; [ | tauto].
-    destruct H1.
-    specialize (H4 e0 H8).
-    rewrite H2.
-    simpl.
-    tauto. 
+        tauto.
+      ++++ rewrite H2.
+          simpl.
+          tauto. 
+  *** destruct H5.
+    +++ destruct H5.
+      destruct H1; [ tauto | ].
+      destruct H1.
+      destruct H4.
+      destruct H11.
+      specialize (H12 e0 H8).
+      rewrite H2.
+      simpl.
+      tauto.
+    +++ destruct H5.
+      destruct H1; [ | tauto].
+      destruct H1.
+      destruct H4.
+      destruct H11.
+      specialize (H12 e0 H8).
+      rewrite H2.
+      simpl.
+      tauto. 
 Qed.
+
 
 (* Level 1 *)
 (* 每一步新加的v与选出来的点用选的边连通 *)
@@ -584,7 +691,9 @@ Lemma vertices_candidate_is_connected {V E: Type}:
   |} v u.
 Proof.
   intros.
+  pose proof H0 as P0.
   unfold set_of_the_edges_want_to_add in H0.
+  pose proof H as P.
   unfold graph_connected in H.
   destruct H as [H L].
   unfold connected.
@@ -593,6 +702,7 @@ Proof.
   clear H6.
   unfold set_of_adjacent_edge_to_taken in H0.
   destruct H0.
+  pose proof H1 as P1.
   unfold set_of_the_vertices_want_to_add in H1.
   unfold is_tree in H4.
   destruct H4.
@@ -635,69 +745,10 @@ Proof.
         weight := pg.(weight)
       |}).
       { rewrite H3.
-        unfold is_legal_graph in *.
-        intros.
-        change ({|
-          vertices := σ2.(vertex_taken);
-          edges := e :: σ1.(edge_taken);
-          src := pg.(src);
-          dst := pg.(dst);
-          weight := pg.(weight)
-        |}.(evalid) e0) with (In e0 (e :: σ1.(edge_taken))) in H13.
-        simpl in H13.
-        destruct H13.
-        ++ subst e0.
-            split.
-            ** rewrite <- H3.
-                rewrite <- H9.
-                change ({|
-                  vertices := σ2.(vertex_taken);
-                  edges := σ2.(edge_taken);
-                  src := pg.(src);
-                  dst := pg.(dst);
-                  weight := pg.(weight)
-                |}.(vvalid) (pg.(src) e)) with (In (pg.(src) e) σ2.(vertex_taken)).
-                rewrite H1.
-                tauto.
-            ** rewrite <- H3.
-                rewrite <- H10.
-                change ({|
-                  vertices := σ2.(vertex_taken);
-                  edges := σ2.(edge_taken);
-                  src := pg.(src);
-                  dst := pg.(dst);
-                  weight := pg.(weight)
-                |}.(vvalid) (pg.(dst) e)) with (In (pg.(dst) e) σ2.(vertex_taken)).
-                rewrite H2.
-                simpl; right.
-                tauto.
-        ++ split.
-           ** rewrite <- H3.
-              rewrite <- H9.
-              change ({|
-                vertices := σ2.(vertex_taken);
-                edges := σ2.(edge_taken);
-                src := pg.(src);
-                dst := pg.(dst);
-                weight := pg.(weight)
-              |}.(vvalid) (pg.(src) e0)) with (In (pg.(src) e0) σ2.(vertex_taken)).
-              rewrite H2.
-              simpl; right.
-              specialize (H7 e0 H13).
-              tauto.
-            ** rewrite <- H3.
-              rewrite <- H10.
-              change ({|
-                vertices := σ2.(vertex_taken);
-                edges := σ2.(edge_taken);
-                src := pg.(src);
-                dst := pg.(dst);
-                weight := pg.(weight)
-              |}.(vvalid) (pg.(dst) e0)) with (In (pg.(dst) e0) σ2.(vertex_taken)).
-              rewrite H2.
-              simpl; right.
-              specialize (H7 e0 H13).
-              tauto. }
+        pose proof keep_chosen_graph_legal pg σ1 σ2 e v.
+        rewrite <- H3.
+        apply H13;[ tauto | tauto | tauto | tauto | tauto | tauto ].
+        }
       transitivity_1n (pg.(dst) e).
       + rewrite <- H1.
         rewrite H9, H10.
@@ -759,69 +810,11 @@ Proof.
         weight := pg.(weight)
       |}).
       { rewrite H3.
-      unfold is_legal_graph in *.
-      intros.
-      change ({|
-        vertices := σ2.(vertex_taken);
-        edges := e :: σ1.(edge_taken);
-        src := pg.(src);
-        dst := pg.(dst);
-        weight := pg.(weight)
-      |}.(evalid) e0) with (In e0 (e :: σ1.(edge_taken))) in H13.
-      simpl in H13.
-      destruct H13.
-      ++ subst e0.
-          split.
-          ** rewrite <- H3.
-              rewrite <- H9.
-              change ({|
-                vertices := σ2.(vertex_taken);
-                edges := σ2.(edge_taken);
-                src := pg.(src);
-                dst := pg.(dst);
-                weight := pg.(weight)
-              |}.(vvalid) (pg.(src) e)) with (In (pg.(src) e) σ2.(vertex_taken)).
-              rewrite H2.
-              simpl; right.
-              tauto.
-          ** rewrite <- H3.
-              rewrite <- H10.
-              change ({|
-                vertices := σ2.(vertex_taken);
-                edges := σ2.(edge_taken);
-                src := pg.(src);
-                dst := pg.(dst);
-                weight := pg.(weight)
-              |}.(vvalid) (pg.(dst) e)) with (In (pg.(dst) e) σ2.(vertex_taken)).
-              rewrite H1.
-              tauto.
-              ++ split.
-              ** rewrite <- H3.
-                 rewrite <- H9.
-                 change ({|
-                   vertices := σ2.(vertex_taken);
-                   edges := σ2.(edge_taken);
-                   src := pg.(src);
-                   dst := pg.(dst);
-                   weight := pg.(weight)
-                 |}.(vvalid) (pg.(src) e0)) with (In (pg.(src) e0) σ2.(vertex_taken)).
-                 rewrite H2.
-                 simpl; right.
-                 specialize (H7 e0 H13).
-                 tauto.
-               ** rewrite <- H3.
-                 rewrite <- H10.
-                 change ({|
-                   vertices := σ2.(vertex_taken);
-                   edges := σ2.(edge_taken);
-                   src := pg.(src);
-                   dst := pg.(dst);
-                   weight := pg.(weight)
-                 |}.(vvalid) (pg.(dst) e0)) with (In (pg.(dst) e0) σ2.(vertex_taken)).
-                 rewrite H2.
-                 simpl; right.
-                 specialize (H7 e0 H13).
-                 tauto. }
+        pose proof 
+        keep_chosen_graph_legal pg σ1 σ2 e v.
+        rewrite <- H3.
+        apply H13;[ tauto | tauto | tauto | tauto | tauto | tauto ].
+        }
       transitivity_1n (pg.(src) e).
       + rewrite <- H1.
         apply step_symmetric.
@@ -1153,7 +1146,7 @@ Proof.
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Qed. *)
 
-Theorem intermediate_point_between_x_and_y {V E: Type}:
+(* Theorem intermediate_point_between_x_and_y {V E: Type}:
   forall (pg: PreGraph V E) (σ1: State V E) (e: E) (v: V),
     graph_connected pg ->
     set_of_the_vertices_want_to_add pg σ1 e v ->
@@ -1161,11 +1154,7 @@ Theorem intermediate_point_between_x_and_y {V E: Type}:
     .
 Proof.
   
-Qed.
-
-
-
-
+Qed. *)
 
 
 Theorem Hoare_add_the_edge_and_the_vertex_for_ismst {V E: Type}:
@@ -1191,6 +1180,7 @@ Proof.
   intros; clear a.
   destruct H0 as [H2 [H3 [H4 [vl [el [H5 [H6 H7]]]]]]].
   destruct H1 as [H0 H1].
+Admitted.
 
 
 (* Level 3 *)
@@ -1243,9 +1233,13 @@ Proof.
     specialize (H0 a).
     destruct H0; tauto.
   + intros.
-    specialize (IHL A).
-    Admitted.
-    
+    destruct (classic (A a)).
+    - destruct (classic (exists a': Z, A a' /\ a' <> a)).
+      * specialize (IHL (fun x => A x /\ x <> a)).
+        Admitted.
+        
+      
+
 (* Level 3 *)
 Theorem finite_graph_has_finite_subgraphs {V E: Type}: 
   forall (pg: PreGraph V E), 
@@ -1318,6 +1312,96 @@ Proof.
 Admitted.
 (* ******************************************************************************* *)
 
+(* Level 3 *)
+Lemma no_dup_list_have_same_length_if_set_equal {V : Type}:
+  forall (l1 l2: list V),
+    NoDup l1 -> NoDup l2 -> 
+    list_to_set l1 == list_to_set l2 -> 
+    length l1 = length l2.
+Proof.
+  intros.
+Admitted.
+
+Lemma no_dup_list_equal_if_length_equal_and_set_include {V: Type}:
+  forall (l1 l2: list V),
+    length l1 = length l2 -> 
+    list_to_set l1 ⊆ list_to_set l2 -> 
+    NoDup l1 -> NoDup l2 -> 
+    l1 = l2.
+Proof.
+  intros.
+Admitted.
+
+(* Level 3 *)
+Lemma I1_plus_I2_plus_I3_to_minimum_spanning_tree {V E: Type} (s: State V E):
+  forall (pg: PreGraph V E),
+    graph_connected pg -> 
+    I1 pg s -> I2 pg s -> I3 pg s -> is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken).
+Proof.
+  intros.
+  unfold I1 in H0.
+  unfold I3 in H0.
+  destruct H0.
+  destruct H0.
+  unfold I2 in H1.
+  unfold I3 in H2.
+  destruct H0.
+  destruct H3.
+  pose proof H0.
+  pose proof H1.
+  unfold is_tree in H1.
+  destruct H1.
+  unfold graph_connected in H,H7.
+  destruct H7.
+  clear H8.
+  destruct H.
+  clear H8.
+  unfold is_legal_graph in H.
+  unfold is_minimal_spanning_tree in H0.
+  destruct H0.
+  unfold is_spanning_tree in H0.
+  destruct H0.
+  rewrite <- H2 in H9.
+  unfold is_minimal_spanning_tree.
+  unfold is_spanning_tree.
+  split.
+  + split; auto.
+  + intros.
+    specialize (H8 vl' el').
+    clear H3.
+    unfold is_tree in H0.
+    destruct H0.
+    unfold graph_connected in H3.
+    destruct H3.
+    clear H11.
+    unfold is_legal_graph in H3.
+    destruct H3.
+    destruct H11.
+    clear H12.
+    simpl in H3, H11.
+    unfold is_legal_graph in H7.
+    destruct H7.
+    destruct H12.
+    clear H13.
+    simpl in H7, H12.
+    pose proof (no_dup_list_have_same_length_if_set_equal x s.(vertex_taken)).
+    pose proof H13 H3 H7 H9.
+    clear H13.
+    rewrite H14 in H0.
+    rewrite <- H1 in H0.
+    assert (length x0 = length s.(edge_taken)).
+    {
+      lia.
+    }
+    clear H14.
+    clear H7.
+    clear H1.
+    clear H0.
+    clear H9.
+    clear H3.
+    clear H2.
+Admitted.
+
 
 Theorem prim_functional_correctness_foundation {V E: Type}: 
     forall (u: V) (pg: PreGraph V E),
@@ -1328,7 +1412,8 @@ Theorem prim_functional_correctness_foundation {V E: Type}:
               (fun (_: unit) (s: State V E) => 
               is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
 Proof.
-Admitted.
+
+
 
 Theorem prim_functional_correctness {V E: Type}:
     forall (u: V) (pg: PreGraph V E),
