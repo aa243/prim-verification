@@ -1413,9 +1413,25 @@ Proof.
       destruct H2.
       subst v.
       tauto.
-    * 
-       
-     
+    * destruct L as [_ [_ _]].
+      sets_unfold in subgraph_vvalid0.
+      specialize (subgraph_vvalid0 a H18);tauto.
+  + split; [ | tauto].
+    unfold list_to_set.
+    sets_unfold.
+    intros e0 ?.
+    rewrite H1 in H18.
+    destruct H18; [subst; simpl; tauto | simpl; right].
+    unfold is_graph_after_delete in H14.
+    unfold is_new_list_delete_one_from_original in H14.
+    destruct H14 as [H14 _].
+    apply (H14 e0).
+    split.
+    ** unfold list_to_set in H7; sets_unfold in H7.
+      apply (H7 e0 H18).
+    ** destruct (classic (e0 = f)); [ subst; tauto | tauto].
+Qed.
+
 (* Level 3 *)
 Theorem keep_I1 {V E: Type} (s1 s2: State V E):
   forall (pg: PreGraph V E),
