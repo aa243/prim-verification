@@ -2,6 +2,8 @@ Require Import Coq.Lists.List.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Logic.Classical.
+Require Import Coq.Logic.FunctionalExtensionality.
+Require Import Coq.Logic.ProofIrrelevance.
 From SetsClass Require Import SetsClass.
 Import SetsNotation.
 Local Open Scope sets_scope.
@@ -1166,30 +1168,32 @@ Proof.
             left; tauto.
         +++ rewrite H0 in H.
             apply NoDup_remove_2 in H.
-            
+Admitted.
 
-    
-Qed.
+Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
+  NoDup l -> In a l -> 
+  exists l', Z.add (get_sum pg l') (pg.(weight) a) = (get_sum pg l)
+  /\ length l' + 1 = length l /\ NoDup l' 
+  /\ is_new_list_delete_one_from_original l a l' .
+Proof.
+Admitted.
   
 
 Definition is_graph_after_delete {V E} (pg: PreGraph V E) (vl: list V) (el: list E) (e: E): list V -> list E -> Prop :=
   fun vl' el' => is_new_list_delete_one_from_original el e el'.
 
-Definition is_graph_after_add {V E} (pg: PreGraph V E) (vl: list V) (el: list E) (e: E): list V -> list E -> Prop :=
-  fun vl' el' => is_new_list_add_one_from_original el e el'.
-
-Theorem either_with_x_or_with_y {V E: Type}:
+(* Theorem either_with_x_or_with_y {V E: Type}:
   forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E) (x y k: V),
     graph_connected pg ->
     is_minimal_spanning_tree pg vl el ->
     In e el ->
     pg.(vvalid) k ->
-    (x = pg.(src) e /\ y = pg.(dst) e) \/ (x = pg.(dst) e /\ y = pg.(src) e) ->
+    (x = pg.(src) e /\ y = pg.(dst) e) \/ (x = pg.(dst) e /\ y = pg.(src) e) -> *)
 
     
 
 
-Theorem intermediate_point_between_x_and_y {V E: Type}:
+(* Theorem intermediate_point_between_x_and_y {V E: Type}:
   forall (pg: PreGraph V E) (s: State V E) (e: E) (v: V) (vl: list V) (el: list E),
     graph_connected pg ->
     set_of_the_vertices_want_to_add pg s e v ->
@@ -1201,7 +1205,7 @@ Theorem intermediate_point_between_x_and_y {V E: Type}:
     (exists f x y, ).
 Proof.
   
-Qed.
+Qed. *)
 
 
 
@@ -1236,13 +1240,30 @@ Theorem keep_I1 {V E: Type} (s1 s2: State V E):
   forall (u: V) (pg: PreGraph V E),
         pg.(vvalid) u -> 
         graph_connected pg -> 
-        Hoare (fun s => I1 pg s) 
+        Hoare (fun s => I1 pg s /\ subgraph {|
+          vertices := s.(vertex_taken);
+          edges := s.(edge_taken);
+          src := pg.(src);
+          dst := pg.(dst);
+          weight := pg.(weight)
+        |} pg )
         (body_prim pg tt)
         (fun res (s: State V E) => 
             match res with
-            | by_continue _ => I1 pg s
-            | by_break _ => I1 pg s
+            | by_continue _ => I1 pg s /\ subgraph {|
+              vertices := s.(vertex_taken);
+              edges := s.(edge_taken);
+              src := pg.(src);
+              dst := pg.(dst);
+              weight := pg.(weight) |} pg
+            | by_break _ => I1 pg s /\ subgraph {|
+              vertices := s.(vertex_taken);
+              edges := s.(edge_taken);
+              src := pg.(src);
+              dst := pg.(dst);
+              weight := pg.(weight) |} pg
             end).
+Proof.
 Proof.
   intros.
   unfold I1.
@@ -1260,11 +1281,25 @@ Proof.
       ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
       ++ intros v.
           eapply Hoare_bind; [ | intros; apply Hoare_ret'].
-          +++ apply (Hoare_add_the_edge_and_the_vertex_for_ismst pg e v).
-              tauto.
-          +++ intros.
-              tauto.
-Qed.
+Admitted.
+
+(* Level 3 *)
+Theorem break_with_I1 {V E: Type}:
+  forall (pg: PreGraph V E),
+  graph_connected pg -> 
+  Hoare (fun s0 => I1 pg s0)
+        (prim pg tt)
+        (fun (_: unit) (s: State V E) => 
+        I1 pg s).
+Proof.
+  intros.
+  unfold prim.
+  apply (Hoare_repeat_break (body_prim pg) 
+                            (fun (_: unit) (s0: State V E) => I1 pg s0)
+                            (fun (_: unit) (s: State V E) => 
+                            I1 pg s)).
+  intros.
+Admitted.
 
 (* *************************************************************************** *)
 (* 关于初始状态的命题 *)
@@ -1369,15 +1404,134 @@ Proof.
   intros.
 Admitted.
 
-Lemma no_dup_list_equal_if_length_equal_and_set_include {V: Type}:
+Lemma no_dup_set_equal_if_length_equal_and_set_include {V: Type}:
   forall (l1 l2: list V),
     length l1 = length l2 -> 
     list_to_set l1 ⊆ list_to_set l2 -> 
     NoDup l1 -> NoDup l2 -> 
-    l1 = l2.
+    list_to_set l1 == list_to_set l2.
 Proof.
   intros.
 Admitted.
+
+Lemma get_sum_1n {V E: Type}:
+  forall (pg: PreGraph V E) (l: list E) (e: E),
+    get_sum pg (e :: l) = Z.add (get_sum pg l) (pg.(weight) e).
+Proof.
+  intros.
+  unfold get_sum.
+  assert ((e::l) = [e] ++ l).
+  {
+    simpl.
+    reflexivity.
+  }
+  rewrite H.
+  pose proof (fold_right_app Z.add [pg.(weight) e] (map pg.(weight) l) 0%Z).
+  assert ([pg.(weight) e] ++ map pg.(weight) l = map pg.(weight) ([e] ++ l)).
+  {
+    simpl.
+    reflexivity.
+  }
+  rewrite H1 in H0.
+  rewrite H0.
+  simpl.
+  lia.
+Qed.
+
+Lemma no_dup_list_have_same_sum_if_set_equal {V E: Type}:
+  forall (pg: PreGraph V E) (l1 l2: list E),
+    NoDup l1 -> NoDup l2 -> 
+    length l1 = length l2 ->
+    list_to_set l1 == list_to_set l2 ->
+    get_sum pg l1 = get_sum pg l2.
+Proof.
+  induction l1.
+  + intros.
+    assert (l2 = nil).
+    {
+      apply length_zero_iff_nil.
+      rewrite <- H1.
+      simpl.
+      reflexivity.
+    }
+    rewrite H3.
+    reflexivity.
+  + intros.
+    unfold list_to_set in H2.
+    sets_unfold in H2.
+    assert (In a (a::l1)).
+    {
+      simpl.
+      tauto.
+    }
+    rewrite H2 in H3.
+    pose proof (deleted_list_exists_with_sum_equal pg l2 a).
+    pose proof H4 H0 H3.
+    clear H4.
+    destruct H5 as [l2' ?].
+    destruct H4 as [X ?].
+    unfold is_new_list_delete_one_from_original in H4.
+    destruct H4.
+    assert (NoDup l1).
+    {
+      inversion H.
+      tauto.
+    }
+    assert (length l1 + 1 = length (a :: l1)).
+    {
+      simpl.
+      lia.
+    }
+    rewrite H1 in H7.
+    rewrite <- H4 in H7.
+    assert (length l1 = length l2').
+    {
+      lia.
+    }
+    clear H7.
+    destruct H5.
+    assert (list_to_set l1 == list_to_set l2').
+    {
+      unfold list_to_set.
+      sets_unfold.
+      intros.
+      split.
+      + intros.
+        assert (In a0 (a :: l1)).
+        {
+          simpl.
+          right.
+          tauto.
+        }
+        specialize (H2 a0).
+        rewrite H2 in H10.
+        destruct (classic (a0 = a)).
+        - subst.
+          apply NoDup_cons_iff in H.
+          destruct H.
+          tauto.
+        - specialize (H7 a0).
+          tauto.
+      + intros.
+        specialize (H7 a0).
+        rewrite H7 in H9.
+        destruct H9.
+        specialize (H2 a0).
+        rewrite <- H2 in H9.
+        simpl in H9.
+        destruct H9.
+        ++ subst.
+           tauto.
+        ++ tauto. 
+    }
+    specialize (IHl1 l2' H6 H5 H8 H9).
+    rewrite <- X.
+    pose proof (get_sum_1n pg l1 a).
+    rewrite H10.
+    rewrite IHl1.
+    reflexivity.
+Qed.
+    
 
 (* Level 3 *)
 Lemma I1_plus_I2_plus_I3_to_minimum_spanning_tree {V E: Type} (s: State V E):
@@ -1410,7 +1564,6 @@ Proof.
   destruct H0.
   rewrite <- H2 in H9.
   unfold is_minimal_spanning_tree.
-  unfold is_spanning_tree.
   split.
   + split; auto.
   + intros.
@@ -1447,19 +1600,34 @@ Proof.
     clear H9.
     clear H3.
     clear H2.
-Admitted.
+    pose proof (no_dup_set_equal_if_length_equal_and_set_include s.(edge_taken) x0).
+    assert (length s.(edge_taken) = length x0).
+    {
+      lia.
+    }
+    pose proof H0 H1 H4 H12 H11.
+    clear H0 H13.
+    pose proof (no_dup_list_have_same_sum_if_set_equal pg s.(edge_taken) x0).
+    pose proof H0 H12 H11 H1 H2.
+    rewrite H3.
+    pose proof H8 H10.
+    tauto.
+Qed.
 
 
 Theorem prim_functional_correctness_foundation {V E: Type}: 
     forall (u: V) (pg: PreGraph V E),
         pg.(vvalid) u ->
         graph_connected pg -> 
-        Hoare (fun s => I1 pg s)
+        Hoare (fun s => I1 pg s /\ I2 pg s)
               (prim pg tt)
               (fun (_: unit) (s: State V E) => 
               is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
 Proof.
-
+  intros.
+  pose proof (prim_find_tree_if_break_f pg).
+  pose proof (prim_find_all_vertices_if_break_f pg).
+Admitted.
 
 
 Theorem prim_functional_correctness {V E: Type}:
