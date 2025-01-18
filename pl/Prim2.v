@@ -877,7 +877,7 @@ Qed.
 
 (* Level 1 *)
 (* 要求一的命题：每次选的都是一棵树 *)
-Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
+Theorem Hoare_add_the_edge_and_the_vertex_for_istree {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
   graph_connected pg ->
   Hoare
@@ -998,7 +998,7 @@ Proof.
       ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
       ++ intros v.
           eapply Hoare_bind; [ | intros; apply Hoare_ret'].
-          +++ apply (Hoare_add_the_edge_and_the_vertex pg e v).
+          +++ apply (Hoare_add_the_edge_and_the_vertex_for_istree pg e v).
               tauto.
           +++ intros. 
               simpl in H0.
@@ -1054,7 +1054,7 @@ Proof.
     eapply Hoare_bind; [ apply Hoare_get_any_vertex_in_vertex_candidates | ].
     intros v.
     eapply Hoare_bind; [ | intros; apply Hoare_ret'].
-    * apply (Hoare_add_the_edge_and_the_vertex pg0 e v).
+    * apply (Hoare_add_the_edge_and_the_vertex_for_istree pg0 e v).
       tauto.
     * intros.
       simpl in H0.
@@ -1153,6 +1153,83 @@ Proof.
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Qed. *)
 
+Theorem intermediate_point_between_x_and_y {V E: Type}:
+  forall (pg: PreGraph V E) (σ1: State V E) (e: E) (v: V),
+    graph_connected pg ->
+    set_of_the_vertices_want_to_add pg σ1 e v ->
+    set_of_the_edges_want_to_add pg σ1 e -> 
+    .
+Proof.
+  
+Qed.
+
+
+
+
+
+
+Theorem Hoare_add_the_edge_and_the_vertex_for_ismst {V E: Type}:
+  forall (pg: PreGraph V E) (e: E) (v: V),
+  graph_connected pg ->
+  Hoare
+  (fun s : State V E =>
+  set_of_the_vertices_want_to_add pg s e v /\
+  set_of_the_edges_want_to_add pg s e /\
+  ~ list_to_set s.(vertex_taken) == pg.(vvalid) /\
+  (exists (vl : list V) (el : list E),
+      is_minimal_spanning_tree pg vl el /\
+      list_to_set s.(vertex_taken) ⊆ list_to_set vl /\
+      list_to_set s.(edge_taken) ⊆ list_to_set el))
+  (add_the_edge_and_the_vertex pg e v)
+  (fun _ s => exists (vl' : list V) (el' : list E),
+  is_minimal_spanning_tree pg vl' el' /\
+  list_to_set s.(vertex_taken) ⊆ list_to_set vl' /\
+   list_to_set s.(edge_taken) ⊆ list_to_set el').
+Proof.
+  intros.
+  unfold Hoare, add_the_edge_and_the_vertex.
+  intros; clear a.
+  destruct H0 as [H2 [H3 [H4 [vl [el [H5 [H6 H7]]]]]]].
+  destruct H1 as [H0 H1].
+
+
+(* Level 3 *)
+Theorem keep_I1 {V E: Type} (s1 s2: State V E):
+  forall (u: V) (pg: PreGraph V E),
+        pg.(vvalid) u -> 
+        graph_connected pg -> 
+        Hoare (fun s => I1 pg s) 
+        (body_prim pg tt)
+        (fun res (s: State V E) => 
+            match res with
+            | by_continue _ => I1 pg s
+            | by_break _ => I1 pg s
+            end).
+Proof.
+  intros.
+  unfold I1.
+  apply Hoare_choice.
+  + apply Hoare_test_bind.
+    intros.
+    apply Hoare_ret'.
+    intros.
+    tauto.
+  + apply Hoare_test_bind.
+    eapply Hoare_bind.
+    * apply (Hoare_get_any_edge_in_edge_candidates pg _).
+    * intros e.
+      eapply Hoare_bind.
+      ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
+      ++ intros v.
+          eapply Hoare_bind; [ | intros; apply Hoare_ret'].
+          +++ apply (Hoare_add_the_edge_and_the_vertex_for_ismst pg e v).
+              tauto.
+          +++ intros.
+              tauto.
+Qed.
+
+(* *************************************************************************** *)
+(* 关于初始状态的命题 *)
 (* Level 3 *)
 Theorem nonempty_finite_set_has_minimal: 
   forall (L: list Z) (A: Z -> Prop),
@@ -1200,27 +1277,6 @@ Proof.
   pose proof (nonempty_finite_set_has_minimal (map (get_sum pg) (map get_edges subgl))).
   Admitted.
 
-(* Theorem the_edge_want_to_delete {V E: Type} (s: State V E) (x y: V) (pg: PreGraph V E):
-
-Proof.
-  
-Qed. *)
-
-(* Level 3 *)
-Theorem keep_I1 {V E: Type} (s1 s2: State V E):
-  forall (u: V) (pg: PreGraph V E),
-        pg.(vvalid) u -> 
-        graph_connected pg -> 
-        Hoare (fun s => I1 pg s) 
-        (body_prim pg tt)
-        (fun res (s: State V E) => 
-            match res with
-            | by_continue _ => I1 pg s
-            | by_break _ => I1 pg s
-            end).
-Proof.
-Admitted.
-
 (* Level 3 *)
 Lemma initial_state {V E: Type} (s: State V E):
     forall (u: V) (pg: PreGraph V E),
@@ -1260,6 +1316,8 @@ Proof.
       unfold length.
       lia.
 Admitted.
+(* ******************************************************************************* *)
+
 
 Theorem prim_functional_correctness_foundation {V E: Type}: 
     forall (u: V) (pg: PreGraph V E),
