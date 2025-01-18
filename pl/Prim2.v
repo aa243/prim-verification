@@ -274,42 +274,6 @@ Proof.
     * reflexivity.
 Qed.
 
-Theorem connected_symmetric {V E: Type}:
- forall (pg: PreGraph V E) x y, connected pg x y -> connected pg y x.
-Proof.
- unfold connected.
- intros.
- induction_1n H.
- + reflexivity.
- + assert (step pg x0 x).
-  {
-  unfold step in H0.
-   unfold step.
-   destruct H0 as [e ?].
-  exists e.
-  destruct H0.
-  + right.
-  destruct H0.
-  split.
-  - tauto.
-  - tauto.
-  - tauto.
-  - tauto.
-  - tauto.
-  + left.
-  destruct H0.
-  split.
-  - tauto.
-  - tauto.
-  - tauto.
-  - tauto.
-  - tauto.
-  }
- transitivity_n1 x0.
- * tauto.
- * tauto.
-Qed.
-
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
     length el + 1 = length vl /\
     graph_connected (Build_PreGraph V E vl el pg.(src) pg.(dst) pg.(weight)).
@@ -323,51 +287,6 @@ Definition is_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: lis
 
 Definition is_minimal_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop :=
   is_spanning_tree pg vl el /\ (forall vl' el', is_spanning_tree pg vl' el' -> (get_sum pg el <= get_sum pg el')%Z).
-
-Theorem nonempty_finite_set_has_minimal: 
-  forall (L: list Z) (A: Z -> Prop),
-    (exists a, A a) -> 
-    (forall a, A a -> In a L) -> 
-    exists a, A a /\ (forall a', A a' -> a <= a')%Z.
-Proof.
-  induction L.
-  + intros.
-    destruct H as [a ?].
-    specialize (H0 a).
-    destruct H0; tauto.
-  + intros.
-    specialize (IHL A).
-    Admitted.
-    
-
-Theorem finite_graph_has_finite_subgraphs {V E: Type}: 
-  forall (pg: PreGraph V E), 
-    exists subgl: list (PreGraph V E), (forall subg, In subg subgl <-> subgraph subg pg).
-Proof.
-  (* by induction *)
-  Admitted.
-
-
-Theorem spanning_tree_exists {V E: Type}:
-  forall (pg: PreGraph V E), 
-    graph_connected pg -> 
-    exists vl el, is_spanning_tree pg vl el.
-Proof.
-  (* by induction. *)
-  Admitted.
-
-Theorem minimal_spanning_tree_exists {V E: Type}:
-  forall (pg: PreGraph V E), 
-    graph_connected pg ->
-    exists vl el, is_minimal_spanning_tree pg vl el.
-Proof.
-  unfold is_minimal_spanning_tree.
-  intros.
-  pose proof (spanning_tree_exists pg H).
-  pose proof (finite_graph_has_finite_subgraphs pg).
-  destruct H1 as [subgl ?].
-  pose proof (nonempty_finite_set_has_minimal (map (get_sum pg) (map get_edges subgl))).
-  Admitted.
 
 Record State (V E: Type) := 
 {
@@ -437,6 +356,64 @@ Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
 Definition I3 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   list_to_set s.(vertex_taken) == pg.(vvalid).
 
+(* Level 1 *)
+(* 初始状态满足 I2 *)
+Lemma initial_state_to_I2 {V E: Type} (s: State V E):
+  forall (u: V) (pg: PreGraph V E),
+  pg.(vvalid) u ->
+  graph_connected pg -> 
+  s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil -> I2 pg s.
+Proof.
+intros.
+unfold I2.
+unfold is_tree.
+destruct H1 as [? ?].
+rewrite H2.
+rewrite H1.
+simpl.
+split; [ lia | ].
+unfold graph_connected.
+split.
++ unfold is_legal_graph.
+  intros.
+  assert (~ {|
+    vertices := [u];
+    edges := [];
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |}.(evalid) e).
+  {
+    unfold evalid.
+    tauto. 
+  }
+  tauto.
++
+  intros.
+  unfold connected.
+  assert (In x [u]).
+  {
+    apply H3.
+  }
+  assert (In y [u]).
+  {
+    apply H4. 
+  }
+  assert (x = u).
+  {
+    simpl in H5.
+    destruct H5; [rewrite H5 ; reflexivity| tauto].
+  }
+  assert (y = u).
+  {
+    simpl in H6.
+    destruct H6; [rewrite H6 ; reflexivity| tauto].
+  }
+  subst.
+  reflexivity.
+Qed.
+
+(* Level 1 *)
 Theorem Hoare_get_any_edge_in_edge_candidates {V E: Type}:
   forall (pg: PreGraph V E) (P: State V E -> Prop),
   Hoare P (get_any_edge_in_edge_candidates pg) (fun e s => set_of_the_edges_want_to_add pg s e /\ P s).
@@ -449,6 +426,7 @@ Proof.
   tauto.
 Qed.
 
+(* Level 1 *)
 Theorem Hoare_get_any_vertex_in_vertex_candidates {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (P: State V E -> Prop),
   Hoare P (get_any_vertex_in_vertex_candidates pg e) (fun v s => set_of_the_vertices_want_to_add pg s e v /\ P s).
@@ -461,22 +439,7 @@ Proof.
   tauto.
 Qed.
 
-
-Definition I4 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
-  is_legal_graph (Build_PreGraph V E s.(vertex_taken) s.(edge_taken) pg.(src) pg.(dst) pg.(weight)).
-
-Theorem keep_I4 {V E: Type} (pg: PreGraph V E):
-  graph_connected pg -> 
-  Hoare (fun s => I4 pg s) 
-        (body_prim pg tt)
-        (fun res (s: State V E) => 
-            match res with
-            | by_continue _ => I4 pg s
-            | by_break _ => I4 pg s
-            end).
-Proof.
-Admitted.
-
+(* Level 1 *)
 Theorem keep_chosen_graph_legal {V E: Type}:
   forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V),
   graph_connected pg -> 
@@ -501,7 +464,7 @@ Theorem keep_chosen_graph_legal {V E: Type}:
 Proof.
 Admitted.
 
-
+(* Level 1 *)
 Lemma vertices_candidate_is_connected {V E: Type}:
   (* v是candiate， u是任意一点，u和v是连通的。 *)
   forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V) (u: V),
@@ -813,6 +776,7 @@ Proof.
   
 Qed.
 
+(* Level 1 *)
 Theorem Hoare_add_the_edge_and_the_vertex {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
   graph_connected pg ->
@@ -906,38 +870,8 @@ Proof.
             tauto.
 Qed.
 
-(* Lemma keep_I2_and_I4 {V E: Type} (pg: PreGraph V E):
-graph_connected pg -> 
-Hoare (fun s => I2 pg s /\ I4 pg s) 
-      (body_prim pg tt)
-      (fun res (s: State V E) => 
-          match res with
-          | by_continue _ => I2 pg s /\ I4 pg s
-          | by_break _ => I2 pg s /\ I4 pg s
-          end).
-Proof.
-  intros.
-  unfold I2, body_prim.
-  apply Hoare_choice.
-  + apply Hoare_test_bind.
-    intros.
-    apply Hoare_ret'.
-    intros.
-    tauto.
-  + apply Hoare_test_bind.
-    eapply Hoare_bind.
-    * apply (Hoare_get_any_edge_in_edge_candidates pg _).
-    * intros e.
-      eapply Hoare_bind.
-      ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
-      ++ intros v.
-          eapply Hoare_bind; [ | intros; apply Hoare_ret'].
-          +++ apply (Hoare_add_the_edge_and_the_vertex pg e v).
-          +++ intros. 
-              simpl in H0.
-              tauto.
-Qed. *)
-
+(* Level 1 *)
+(* 若上一步的状态满足I2，则经过一步 primbody 之后的状态仍然满足I2 *)
 Lemma keep_I2 {V E: Type} (pg: PreGraph V E):
     graph_connected pg -> 
     Hoare (fun s => I2 pg s) 
@@ -965,19 +899,44 @@ Proof.
       ++ intros v.
           eapply Hoare_bind; [ | intros; apply Hoare_ret'].
           +++ apply (Hoare_add_the_edge_and_the_vertex pg e v).
+              tauto.
           +++ intros. 
               simpl in H0.
               tauto.
 Qed.
 
+(* Level 1 *)
+(* 如果初始状态满足I2，那么prim得到的结果也满足I2 *)
+Theorem prim_find_tree_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
+  graph_connected pg -> 
+  Hoare (fun s0 => I2 pg s0)
+        (prim pg tt)
+        (fun (_: unit) (s: State V E) => 
+        I2 pg s).
+Proof.
+  intros.
+  unfold prim.
+  apply (Hoare_repeat_break (body_prim pg) 
+                            (fun (_: unit) (s0: State V E) => I2 pg s0)
+                            (fun (_: unit) (s: State V E) => 
+                            I2 pg s)).
+  intros.
+  apply (keep_I2 pg ).
+  apply H.
+Qed.
+
+(* Level 2 *)
+(* 如果初始状态满足I2，那么执行 prim_body 后的状态若 continue 则满足I2，
+   若 break 则满足I3 *)
 Lemma break_with_I3 {V E: Type} (pg: PreGraph V E):
   forall (pg: PreGraph V E),
   graph_connected pg ->
-  Hoare (fun s => I2 pg s /\ I4 pg s)
+  Hoare (fun s => I2 pg s)
         (body_prim pg tt)
         (fun res (s: State V E) =>
             match res with
-            | by_continue _ => I2 pg s /\ I4 pg s
+            | by_continue _ => I2 pg s
             | by_break _ => I3 pg s
             end).
 Proof.
@@ -996,10 +955,84 @@ Proof.
     intros v.
     eapply Hoare_bind; [ | intros; apply Hoare_ret'].
     * apply (Hoare_add_the_edge_and_the_vertex pg0 e v).
+      tauto.
     * intros.
       simpl in H0.
       unfold I2.
       tauto.
+Qed.
+
+(* Level 2 *)
+(* 如果初始状态满足I2，那么prim得到的结果满足I3 *)
+Theorem prim_find_all_vertices_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
+  graph_connected pg -> 
+  Hoare (fun s0 => I2 pg s0)
+        (prim pg tt)
+        (fun (_: unit) (s: State V E) => 
+            I3 pg s).
+Proof.
+  intros.
+  unfold prim.
+  apply (Hoare_repeat_break (body_prim pg) 
+                            (fun (_: unit) (s0: State V E) => I2 pg s0)
+                            (fun (_: unit) (s: State V E) => 
+                              I3 pg s)).
+  intros.
+  apply (break_with_I3 pg ).
+  apply H.
+Qed.
+
+(* Level 2 *)
+(* 如果初始状态满足I2，那么prim得到的结果是原图的生成树 *)
+Theorem prim_find_spanning_tree_if_break_f {V E: Type}:
+  forall (pg: PreGraph V E),
+    graph_connected pg -> 
+    Hoare (fun s0 => I2 pg s0)
+          (prim pg tt)
+          (fun (_: unit) (s: State V E) => 
+              is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
+Proof.
+  intros.
+  unfold is_spanning_tree.
+  pose proof (prim_find_tree_if_break_f pg H).
+  pose proof (prim_find_all_vertices_if_break_f pg H).
+  unfold I2 in H0,H1.
+  unfold I3 in H1.
+  unfold I2.
+  unfold Hoare.
+  unfold Hoare in H0, H1.
+  intros.
+  specialize (H0 σ1 a σ2).
+  specialize (H1 σ1 a σ2).
+  pose proof H0 H2 H3.
+  pose proof H1 H2 H3.
+  tauto.
+Qed.
+
+(* Level 2 *)
+(* 从任意一点出发，prim 算法得到的结果都是原图的生成树 *)
+Theorem prim_find_spanning_tree_if_break {V E: Type}:
+  forall (u: V) (pg: PreGraph V E),
+    pg.(vvalid) u ->
+    graph_connected pg -> 
+    Hoare (fun s0 => s0.(vertex_taken) = u :: nil /\ s0.(edge_taken) = nil)
+          (prim pg tt)
+          (fun (_: unit) (s: State V E) => 
+              is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
+Proof.
+  intros.
+  unfold Hoare.
+  pose proof (prim_find_spanning_tree_if_break_f pg H0).
+  unfold Hoare in H1.
+  intros σ1 a σ2.
+  specialize (H1 σ1 a σ2).
+  pose proof (initial_state_to_I2 σ1 u pg).
+  pose proof H2 H H0.
+  intros.
+  pose proof (H3 H4).
+  pose proof (H1 H6 H5).
+  tauto.
 Qed.
 
 (* 设{x,y}是新选的边，x在已选的里，y不在。 如果{x,y}在原来的最小生成树中，什么也不用干
@@ -1020,7 +1053,52 @@ Proof.
   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Qed. *)
 
+(* Level 3 *)
+Theorem nonempty_finite_set_has_minimal: 
+  forall (L: list Z) (A: Z -> Prop),
+    (exists a, A a) -> 
+    (forall a, A a -> In a L) -> 
+    exists a, A a /\ (forall a', A a' -> a <= a')%Z.
+Proof.
+  induction L.
+  + intros.
+    destruct H as [a ?].
+    specialize (H0 a).
+    destruct H0; tauto.
+  + intros.
+    specialize (IHL A).
+    Admitted.
+    
+(* Level 3 *)
+Theorem finite_graph_has_finite_subgraphs {V E: Type}: 
+  forall (pg: PreGraph V E), 
+    exists subgl: list (PreGraph V E), (forall subg, In subg subgl <-> subgraph subg pg).
+Proof.
+  (* by induction *)
+  Admitted.
 
+(* Level 3*)
+Theorem spanning_tree_exists {V E: Type}:
+  forall (pg: PreGraph V E), 
+    graph_connected pg -> 
+    exists vl el, is_spanning_tree pg vl el.
+Proof.
+  (* by induction. *)
+  Admitted.
+
+(* Level 3 *)
+Theorem minimal_spanning_tree_exists {V E: Type}:
+  forall (pg: PreGraph V E), 
+    graph_connected pg ->
+    exists vl el, is_minimal_spanning_tree pg vl el.
+Proof.
+  unfold is_minimal_spanning_tree.
+  intros.
+  pose proof (spanning_tree_exists pg H).
+  pose proof (finite_graph_has_finite_subgraphs pg).
+  destruct H1 as [subgl ?].
+  pose proof (nonempty_finite_set_has_minimal (map (get_sum pg) (map get_edges subgl))).
+  Admitted.
 
 (* Theorem the_edge_want_to_delete {V E: Type} (s: State V E) (x y: V) (pg: PreGraph V E):
 
@@ -1028,8 +1106,7 @@ Proof.
   
 Qed. *)
 
-
-
+(* Level 3 *)
 Theorem keep_I1 {V E: Type} (s1 s2: State V E):
   forall (u: V) (pg: PreGraph V E),
         pg.(vvalid) u -> 
@@ -1044,6 +1121,7 @@ Theorem keep_I1 {V E: Type} (s1 s2: State V E):
 Proof.
 Admitted.
 
+(* Level 3 *)
 Lemma initial_state {V E: Type} (s: State V E):
     forall (u: V) (pg: PreGraph V E),
     pg.(vvalid) u ->
@@ -1083,150 +1161,6 @@ Proof.
       lia.
 Admitted.
 
-Theorem prim_find_tree_if_break_f {V E: Type}:
-  forall (pg: PreGraph V E),
-  graph_connected pg -> 
-  Hoare (fun s0 => I2 pg s0 /\ I4 pg s0)
-        (prim pg tt)
-        (fun (_: unit) (s: State V E) => 
-        I2 pg s /\ I4 pg s).
-Proof.
-  intros.
-  unfold prim.
-  apply (Hoare_repeat_break (body_prim pg) 
-                            (fun (_: unit) (s0: State V E) => I2 pg s0 /\ I4 pg s0)
-                            (fun (_: unit) (s: State V E) => 
-                            I2 pg s /\ I4 pg s)).
-  intros.
-  apply (keep_I2_and_I4 pg ).
-  apply H.
-Qed.
-
-Theorem prim_find_all_vertices_if_break_f {V E: Type}:
-  forall (pg: PreGraph V E),
-  graph_connected pg -> 
-  Hoare (fun s0 => I2 pg s0 /\ I4 pg s0)
-        (prim pg tt)
-        (fun (_: unit) (s: State V E) => 
-            I3 pg s).
-Proof.
-  intros.
-  unfold prim.
-  apply (Hoare_repeat_break (body_prim pg) 
-                            (fun (_: unit) (s0: State V E) => I2 pg s0 /\ I4 pg s0)
-                            (fun (_: unit) (s: State V E) => 
-                              I3 pg s)).
-  intros.
-  apply (break_with_I3 pg ).
-  apply H.
-Qed.
-
-Theorem prim_find_spanning_tree_if_break_f {V E: Type}:
-  forall (pg: PreGraph V E),
-    graph_connected pg -> 
-    Hoare (fun s0 => I2 pg s0 /\ I4 pg s0)
-          (prim pg tt)
-          (fun (_: unit) (s: State V E) => 
-              is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
-Proof.
-  intros.
-  unfold is_spanning_tree.
-  pose proof (prim_find_tree_if_break_f pg H).
-  pose proof (prim_find_all_vertices_if_break_f pg H).
-  unfold I2 in H0,H1.
-  unfold I3 in H1.
-  unfold I2.
-  unfold Hoare.
-  unfold Hoare in H0, H1.
-  intros.
-  specialize (H0 σ1 a σ2).
-  specialize (H1 σ1 a σ2).
-  pose proof H0 H2 H3.
-  pose proof H1 H2 H3.
-  tauto.
-Qed.
-
-Lemma initial_state_to_I2 {V E: Type} (s: State V E):
-    forall (u: V) (pg: PreGraph V E),
-    pg.(vvalid) u ->
-    graph_connected pg -> 
-    s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil -> I2 pg s.
-Proof.
-  intros.
-  unfold I2.
-  unfold is_tree.
-  destruct H1 as [? ?].
-  rewrite H2.
-  rewrite H1.
-  simpl.
-  split; [ lia | ].
-  unfold graph_connected.
-  split.
-  + unfold is_legal_graph.
-    intros.
-    assert (~ {|
-      vertices := [u];
-      edges := [];
-      src := pg.(src);
-      dst := pg.(dst);
-      weight := pg.(weight)
-    |}.(evalid) e).
-    {
-      unfold evalid.
-      tauto. 
-    }
-    tauto.
-  +
-    intros.
-    unfold connected.
-    assert (In x [u]).
-    {
-      apply H3.
-    }
-    assert (In y [u]).
-    {
-      apply H4. 
-    }
-    assert (x = u).
-    {
-      simpl in H5.
-      destruct H5; [rewrite H5 ; reflexivity| tauto].
-    }
-    assert (y = u).
-    {
-      simpl in H6.
-      destruct H6; [rewrite H6 ; reflexivity| tauto].
-    }
-    subst.
-    reflexivity.
-Qed.
-
-
-Theorem prim_find_spanning_tree_if_break {V E: Type}:
-  forall (u: V) (pg: PreGraph V E),
-    pg.(vvalid) u ->
-    graph_connected pg -> 
-    Hoare (fun s0 => s0.(vertex_taken) = u :: nil /\ s0.(edge_taken) = nil)
-          (prim pg tt)
-          (fun (_: unit) (s: State V E) => 
-              is_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
-Proof.
-  intros.
-  unfold Hoare.
-  pose proof (prim_find_spanning_tree_if_break_f pg H0).
-  unfold Hoare in H1.
-  intros σ1 a σ2.
-  specialize (H1 σ1 a σ2).
-  pose proof (initial_state_to_I2 σ1 u pg).
-  pose proof H2 H H0.
-  intros.
-  pose proof (H3 H4).
-  pose proof (H1 H6 H5).
-  tauto.
-Qed.
-
-
-
 Theorem prim_functional_correctness_foundation {V E: Type}: 
     forall (u: V) (pg: PreGraph V E),
         pg.(vvalid) u ->
@@ -1248,5 +1182,3 @@ Theorem prim_functional_correctness {V E: Type}:
                 is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
 Proof.
 Admitted.
-
-
