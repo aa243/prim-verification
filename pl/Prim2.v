@@ -342,73 +342,12 @@ Definition reachable_via_lists {V E} (pg: PreGraph V E) (P: list V): V -> V -> P
 
 Definition is_new_list_delete_one_from_original {A} (l: list A) (a: A): list A -> Prop :=
   fun l' => forall x, In x l' <-> In x l /\ ~ x = a.
-  
 
 Lemma deleted_list_exists {A} (l: list A) (a: A):
   NoDup l -> In a l -> exists l', length l' + 1 = length l /\ NoDup l' 
-/\ is_new_list_delete_one_from_original l a l'.
+/\ is_new_list_delete_one_from_original l a l' .
 Proof.
-  intros.
-  apply in_split in H0.
-  destruct H0 as [l1 [l2 ?]].
-  exists (l1 ++ l2).
-  unfold is_new_list_delete_one_from_original.
-  intros.
-  split.
-  *** rewrite H0.
-    rewrite (app_length l1 l2).
-    rewrite app_length.
-    simpl.
-    lia.
-  *** split.
-  ** rewrite H0 in H.
-    apply NoDup_remove_1 in H.
-    tauto.
-  ** intros.
-    split.
-  + intros.
-    apply in_app_or in H1.
-    destruct H1.
-    ++ split.
-        +++ rewrite H0.
-            apply in_or_app.
-            left; tauto.
-        +++ rewrite H0 in H.
-            apply NoDup_remove_2 in H.
-            destruct (classic (x = a)).
-            * subst.
-              assert (In a l1 \/ In a l2).
-              { tauto. }
-              apply in_or_app in H0.
-              tauto.
-            * tauto.
-    ++ split.
-        +++ rewrite H0.
-            apply in_or_app.
-            right. simpl. tauto.
-        +++ rewrite H0 in H.
-            apply NoDup_remove_2 in H.
-            destruct (classic (x = a)).
-            * subst.
-              assert (In a l1 \/ In a l2).
-              { tauto. }
-              apply in_or_app in H0.
-              tauto.
-            * tauto.
-  + intros.
-    destruct H1.
-    apply in_or_app.
-      rewrite H0 in H1.
-    apply in_app_or in H1.
-    destruct H1.
-    ++ tauto.
-    ++ simpl in H1.
-        destruct H1.
-        +++ subst.
-            tauto.
-        +++ subst.
-            tauto.
-Qed.
+Admitted.
   
 Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
   NoDup l -> In a l -> 
@@ -1455,7 +1394,7 @@ Proof.
 Qed.
 
 (* Level 3 *)
-Theorem keep_I1 {V E: Type} (s1 s2: State V E):
+Theorem keep_I1 {V E: Type}:
   forall (pg: PreGraph V E),
         graph_connected pg -> 
         Hoare (fun s => I1 pg s /\ subgraph {|
@@ -1512,19 +1451,41 @@ Qed.
 Theorem break_with_I1 {V E: Type}:
   forall (pg: PreGraph V E),
   graph_connected pg -> 
-  Hoare (fun s0 => I1 pg s0)
+  Hoare (fun s0 => I1 pg s0 /\ subgraph {|
+    vertices := s0.(vertex_taken);
+    edges := s0.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight) |} pg)
         (prim pg tt)
         (fun (_: unit) (s: State V E) => 
-        I1 pg s).
+        I1 pg s /\ subgraph {|
+          vertices := s.(vertex_taken);
+          edges := s.(edge_taken);
+          src := pg.(src);
+          dst := pg.(dst);
+          weight := pg.(weight) |} pg).
 Proof.
   intros.
   unfold prim.
   apply (Hoare_repeat_break (body_prim pg) 
-                            (fun (_: unit) (s0: State V E) => I1 pg s0)
+                            (fun (_: unit) (s0: State V E) => I1 pg s0 /\ subgraph {|
+                              vertices := s0.(vertex_taken);
+                              edges := s0.(edge_taken);
+                              src := pg.(src);
+                              dst := pg.(dst);
+                              weight := pg.(weight) |} pg)
                             (fun (_: unit) (s: State V E) => 
-                            I1 pg s)).
+                              I1 pg s /\ subgraph {|
+                              vertices := s.(vertex_taken);
+                              edges := s.(edge_taken);
+                              src := pg.(src);
+                              dst := pg.(dst);
+                              weight := pg.(weight) |} pg)).
   intros.
-Admitted.
+  apply (keep_I1 pg).
+  apply H.
+Qed.
 
 (* *************************************************************************** *)
 (* 关于初始状态的命题 *)
@@ -1583,7 +1544,14 @@ Lemma initial_state {V E: Type} (s: State V E):
     forall (u: V) (pg: PreGraph V E),
     pg.(vvalid) u ->
     graph_connected pg -> 
-    s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil -> I1 pg s /\ I2 pg s.
+    s.(vertex_taken) = u :: nil /\ s.(edge_taken) = nil -> I1 pg s /\ 
+    subgraph {|
+      vertices := s.(vertex_taken);
+      edges := s.(edge_taken);
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |} pg.
 Proof.
   intros u.
   unfold I1, I2, is_tree.
@@ -1615,7 +1583,6 @@ Proof.
   + split.
     - rewrite H1, H2.
       unfold length.
-      lia.
 Admitted.
 (* ******************************************************************************* *)
 
@@ -1625,110 +1592,110 @@ Lemma no_dup_list_have_same_length_if_set_equal {V : Type}:
     NoDup l1 -> NoDup l2 -> 
     list_to_set l1 == list_to_set l2 -> 
     length l1 = length l2.
-    Proof.
-    intros l1.
-    induction l1.
-    + intros.
-      unfold list_to_set in H1.
-      assert (H_eq: forall v', In v' [] <-> In v' l2).
-      {
-        intros.
-        specialize (H1 v'). 
-        assumption.
-      }
-      destruct l2.
-      - reflexivity.
-      - exfalso. specialize (H_eq v). simpl in H_eq. tauto.
-    +
-      intros.
-      assert (NoDup l1).
-      {
-        inversion H; tauto.
-      }
-      assert (In a l2).
-      {
-        unfold list_to_set in H1.
-        sets_unfold in H1. 
-        pose proof (H1 a).
-        destruct H3.
-        assert (In a (a :: l1)).
-        {
-          simpl; tauto.
-        }
-        pose proof (H3 H5).
-        tauto.
-      }
-      pose proof (deleted_list_exists l2 a H0 H3).
-      destruct H4 as [l2' ?].
-      unfold is_new_list_delete_one_from_original in H4.
-      destruct H4.
-      destruct H5.
-      rewrite <- H4.
-      assert (length l1 = length l2').
-      {
-        pose proof (IHl1 l2' H2 H5).
-        assert (list_to_set l1 == list_to_set l2').
-        {
-          split; intros.
-          +  pose proof H6 a0.
-             destruct H9.
-             assert (list_to_set l2 a0).
-             {
-                unfold list_to_set in H1.
-                sets_unfold in H1.
-                pose proof (H1 a0).
-                unfold list_to_set in H8.
-                destruct H11.
-                assert (In a0 (a :: l1)).
-                {
-                  simpl; tauto.
-                }
-                pose proof (H11 H13).
-                tauto.
-             }
-             unfold list_to_set in H11.
-             assert (a0 <> a).
-             {
-                unfold list_to_set in H8.
-                unfold list_to_set in H1.
-                sets_unfold in H1.
-                assert (~ In a l1).
-                {
-                  inversion H; tauto.
-                }
-                destruct (classic (a0 = a)).
-                + rewrite <- H13 in H12.
-                  tauto.
-                + tauto.
-             }
-             assert (In a0 l2 /\ a0 <> a).
-             {
-                tauto.
-             }
-             pose proof (H10 H13).
-             tauto.
-          + pose proof H6 a0.
-            destruct H9.
-            unfold list_to_set in H8.
-            pose proof (H9 H8).
-            destruct H11.
+Proof.
+intros l1.
+induction l1.
++ intros.
+  unfold list_to_set in H1.
+  assert (H_eq: forall v', In v' [] <-> In v' l2).
+  {
+    intros.
+    specialize (H1 v'). 
+    assumption.
+  }
+  destruct l2.
+  - reflexivity.
+  - exfalso. specialize (H_eq v). simpl in H_eq. tauto.
++
+  intros.
+  assert (NoDup l1).
+  {
+    inversion H; tauto.
+  }
+  assert (In a l2).
+  {
+    unfold list_to_set in H1.
+    sets_unfold in H1. 
+    pose proof (H1 a).
+    destruct H3.
+    assert (In a (a :: l1)).
+    {
+      simpl; tauto.
+    }
+    pose proof (H3 H5).
+    tauto.
+  }
+  pose proof (deleted_list_exists l2 a H0 H3).
+  destruct H4 as [l2' ?].
+  unfold is_new_list_delete_one_from_original in H4.
+  destruct H4.
+  destruct H5.
+  rewrite <- H4.
+  assert (length l1 = length l2').
+  {
+    pose proof (IHl1 l2' H2 H5).
+    assert (list_to_set l1 == list_to_set l2').
+    {
+      split; intros.
+      +  pose proof H6 a0.
+          destruct H9.
+          assert (list_to_set l2 a0).
+          {
             unfold list_to_set in H1.
             sets_unfold in H1.
             pose proof (H1 a0).
-            destruct H13.
-            pose proof (H14 H11).
-            simpl in H15.
-            destruct H15.
-            ++ subst; tauto.
-            ++ tauto.
-        }
-      pose proof (H7 H8).  
-      tauto.
-      }
-      rewrite <- H7.
-      simpl.
-      lia.
-  Qed.
+            unfold list_to_set in H8.
+            destruct H11.
+            assert (In a0 (a :: l1)).
+            {
+              simpl; tauto.
+            }
+            pose proof (H11 H13).
+            tauto.
+          }
+          unfold list_to_set in H11.
+          assert (a0 <> a).
+          {
+            unfold list_to_set in H8.
+            unfold list_to_set in H1.
+            sets_unfold in H1.
+            assert (~ In a l1).
+            {
+              inversion H; tauto.
+            }
+            destruct (classic (a0 = a)).
+            + rewrite <- H13 in H12.
+              tauto.
+            + tauto.
+          }
+          assert (In a0 l2 /\ a0 <> a).
+          {
+            tauto.
+          }
+          pose proof (H10 H13).
+          tauto.
+      + pose proof H6 a0.
+        destruct H9.
+        unfold list_to_set in H8.
+        pose proof (H9 H8).
+        destruct H11.
+        unfold list_to_set in H1.
+        sets_unfold in H1.
+        pose proof (H1 a0).
+        destruct H13.
+        pose proof (H14 H11).
+        simpl in H15.
+        destruct H15.
+        ++ subst; tauto.
+        ++ tauto.
+    }
+  pose proof (H7 H8).  
+  tauto.
+  }
+  rewrite <- H7.
+  simpl.
+  lia.
+Qed.
 
 Lemma no_dup_set_equal_if_length_equal_and_set_include {V: Type}:
   forall (l1 l2: list V),
@@ -1862,6 +1829,7 @@ Proof.
           right.
           tauto.
   Qed.
+
 
 Lemma get_sum_1n {V E: Type}:
   forall (pg: PreGraph V E) (l: list E) (e: E),
@@ -2068,7 +2036,13 @@ Theorem prim_functional_correctness_foundation {V E: Type}:
     forall (u: V) (pg: PreGraph V E),
         pg.(vvalid) u ->
         graph_connected pg -> 
-        Hoare (fun s => I1 pg s /\ I2 pg s)
+        Hoare (fun s => I1 pg s /\ I2 pg s /\ subgraph {|
+          vertices := s.(vertex_taken);
+          edges := s.(edge_taken);
+          src := pg.(src);
+          dst := pg.(dst);
+          weight := pg.(weight)
+        |} pg)
               (prim pg tt)
               (fun (_: unit) (s: State V E) => 
               is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
@@ -2076,7 +2050,40 @@ Proof.
   intros.
   pose proof (prim_find_tree_if_break_f pg).
   pose proof (prim_find_all_vertices_if_break_f pg).
-Admitted.
+  pose proof (break_with_I1 pg).
+  pose proof H1 H0.
+  clear H1.
+  pose proof H2 H0.
+  clear H2.
+  pose proof H3 H0.
+  clear H3.
+  unfold Hoare in H1, H2, H4.
+  unfold Hoare.
+  intros.
+  specialize (H1 σ1 a σ2).
+  specialize (H2 σ1 a σ2).
+  specialize (H4 σ1 a σ2).
+  destruct H3 as [? [? ?]].
+  pose proof H4 H6 H5.
+  pose proof H1 H6 H5.
+  assert (I1 pg σ1 /\
+  subgraph
+    {|
+      vertices := σ1.(vertex_taken);
+      edges := σ1.(edge_taken);
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |} pg).
+  {
+    split;auto.
+  }
+  pose proof H2 H10 H5.
+  pose proof (I1_plus_I2_plus_I3_to_minimum_spanning_tree σ2 pg).
+  destruct H11.
+  pose proof H12 H0 H11 H8 H9.
+  tauto.
+Qed.
 
 
 Theorem prim_functional_correctness {V E: Type}:
@@ -2088,4 +2095,24 @@ Theorem prim_functional_correctness {V E: Type}:
             (fun (_: unit) (s: State V E) => 
                 is_minimal_spanning_tree pg s.(vertex_taken) s.(edge_taken)).
 Proof.
-Admitted.
+  intros.
+  unfold Hoare.
+  intros.
+  pose proof (prim_functional_correctness_foundation u pg).
+  pose proof (initial_state σ1 u pg).
+  pose proof (initial_state_to_I2 σ1 u pg).
+  pose proof H3 H H0.
+  clear H3.
+  pose proof H4 H H0 H1.
+  clear H4.
+  pose proof H5 H H0 H1.
+  clear H5.
+  unfold Hoare in H6.
+  destruct H3.
+  specialize (H6 σ1 a σ2).
+  destruct H6.
+  + split;[tauto|split;[tauto|tauto]].
+  + tauto.
+  + unfold is_minimal_spanning_tree.
+    split; auto.
+Qed.
