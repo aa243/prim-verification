@@ -3,6 +3,7 @@ Require Import Coq.ZArith.ZArith.
 Require Import Coq.micromega.Psatz.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Lists.List.
+Require Import Coq.Logic.Classical.
 Require Import Coq.Sorting.Permutation.
 Require Import PL.FixedPoint.
 Require Import PL.Monad.
@@ -499,6 +500,7 @@ Definition step {V E: Type} (pg: PreGraph V E) (x y: V): Prop :=
 Definition reachable {V E: Type} (pg: PreGraph V E) :=
   clos_refl_trans (step pg).
 
+
 (** 自反传递闭包_[clos_refl_trans]_是SetsClass库提供的定义。*)
 
 
@@ -777,6 +779,8 @@ Import StateRelMonadExample
        StateRelMonadOp
        StateRelMonadHoare.
 
+(** 下面证明DFS的正确性，首先列出_[push_stack]_、_[pop_stack]_与_[visit]_操作的霍尔
+    逻辑性质。*)
 
 Fact push_stack_fact {V: Type}: forall (v: V) P,
   Hoare P (push_stack v) (fun _ s => exists s', s.(stack) = v :: s'.(stack) /\ s.(visited) = s'.(visited) /\ P s').
@@ -804,6 +808,8 @@ Proof.
   intros s1 _ s2 ? [? ?].
   exists s1; tauto.
 Qed.
+
+(** 以下先证明visited节点都可达，这又依赖于栈中节点都可达。*)
 
 Definition I1 {V E} (pg: PreGraph V E) (u: V): V -> Prop :=
   fun v => reachable pg u v.
@@ -863,7 +869,6 @@ Qed.
 Definition I3 {V E} (pg: PreGraph V E) (u: V): state V -> Prop :=
   fun s => forall v, v ∈ s.(visited) -> reachable pg u v.
 
-
 Lemma DFS_visited_reachable {V E} (pg: PreGraph V E):
   forall (u v: V),
     Hoare (fun s => I1 pg u v /\ I3 pg u s)
@@ -903,6 +908,363 @@ Proof.
       destruct H as [? [? [? [? ?]]]].
       rewrite H1 in H0.
       revert H0; apply H4.
+    - apply Hoare_test_bind.
+      apply Hoare_ret'.
+      tauto.
+Qed.
+
+(** 以下再证明可达节点最终都被visited过。这条看似显然的性质实际并不好证明。证明时需要
+    论证，在DFS过程中，如果一个可达节点尚未被访问，那么必定存在一个栈中节点出发通过一条仅仅包含unvisited节点的路径能到达该节点。这个性质就是下面的_[I4]_。*)
+
+Definition reachable_via_sets {V E} (pg: PreGraph V E) (P: V -> Prop):
+  V -> V -> Prop :=
+  clos_refl_trans (fun x y => step pg x y /\ P y).
+
+Definition I4 {V E} (pg: PreGraph V E): V -> state V -> V -> Prop :=
+  fun v s u1 =>
+    u1 ∈ s.(unvisited) ->
+    exists u0, In u0 (v :: s.(stack)) /\
+               reachable_via_sets pg (s.(unvisited)) u0 u1.
+
+(** 下面试着证明，DFS的单步能保持I4。*)
+
+Theorem DFS_reachable_via_unvisited {V E} (pg: PreGraph V E):
+  forall (u1 v: V),
+    Hoare (fun s => I4 pg v s u1)
+          (body_DFS pg v)
+          (fun res s =>
+             match res with
+             | by_continue w => I4 pg w s u1
+             | by_break _ => True
+             end).
+Proof.
+  intros.
+  unfold body_DFS, I4.
+  apply Hoare_choice.
+  + eapply Hoare_bind; [apply Hoare_any |].
+    intros w.
+    apply Hoare_test_bind.
+    apply Hoare_test_bind.
+    eapply Hoare_bind; [apply push_stack_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s'.
+    eapply Hoare_bind; [apply visit_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s''.
+    apply Hoare_ret'; intros.
+    destruct H as [? [? [? [? [? [? ?]]]]]].
+    rewrite unvisited_visited, H1, H3, Sets_complement_union,
+            <- unvisited_visited in H0.
+    Sets_unfold1 in H0.
+    destruct H0.
+    specialize (H6 H0).
+    destruct H6 as [u0 [? ?]].
+Abort.
+
+(** 这里需要一条关于_[reachable_via_sets pg]_的引理才能继续。*)
+
+Lemma reachable_via_unvisited {V E} (pg: PreGraph V E):
+  forall x y z X,
+    reachable_via_sets pg X x y ->
+    reachable_via_sets pg (X ∩ Sets.complement (Sets.singleton z)) x y \/
+    reachable_via_sets pg (X ∩ Sets.complement (Sets.singleton z)) z y.
+Proof.
+  intros.
+  induction_1n H.
+  + left.
+    reflexivity.
+  + destruct H0.
+    specialize (IHrt z).
+    destruct IHrt as [? | ?].
+    - destruct (classic (z = x0)).
+      * subst x0.
+        right.
+        tauto.
+      * left.
+        transitivity_1n x0; tauto.
+    - right.
+      tauto.
+Qed.
+
+(** 重新回到关于_[I4]_的证明。*)
+
+Theorem DFS_reachable_via_unvisited {V E} (pg: PreGraph V E):
+  forall (u1 v: V),
+    Hoare (fun s => I4 pg v s u1)
+          (body_DFS pg v)
+          (fun res s =>
+             match res with
+             | by_continue w => I4 pg w s u1
+             | by_break _ => True
+             end).
+Proof.
+  intros.
+  unfold body_DFS, I4.
+  apply Hoare_choice.
+  + eapply Hoare_bind; [apply Hoare_any |].
+    intros w.
+    apply Hoare_test_bind.
+    apply Hoare_test_bind.
+    eapply Hoare_bind; [apply push_stack_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s'.
+    eapply Hoare_bind; [apply visit_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s''.
+    apply Hoare_ret'; intros.
+    destruct H as [? [? [? [? [? [? ?]]]]]].
+    rewrite unvisited_visited, H1, H3, Sets_complement_union,
+            <- unvisited_visited in H0.
+    Sets_unfold1 in H0.
+    destruct H0.
+    specialize (H6 H0).
+    destruct H6 as [u0 [? ?]].
+    pose proof reachable_via_unvisited pg u0 u1 w _ H8.
+    destruct H9.
+    - exists u0.
+Abort.
+
+(** 又需要补充_[reachable_via_sets]_的代数性质。*)
+
+#[export] Instance reachable_via_sets_mono {V E} (pg: PreGraph V E):
+  Proper (Sets.included ==> Sets.included) (reachable_via_sets pg).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  sets_unfold; intros u v ?.
+  induction_1n H0.
+  + reflexivity.
+  + destruct H1.
+    apply H in H2.
+    transitivity_1n u0.
+    - tauto.
+    - apply IHrt; tauto.
+Qed.
+
+#[export] Instance reachable_via_sets_congr {V E} (pg: PreGraph V E):
+  Proper (Sets.equiv ==> Sets.equiv) (reachable_via_sets pg).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  apply Sets_equiv_Sets_included; split;
+    apply reachable_via_sets_mono.
+  + rewrite H; reflexivity.
+  + rewrite H; reflexivity.
+Qed.
+
+#[export] Instance reachable_via_sets_congr' {V E} (pg: PreGraph V E):
+  Proper (Sets.equiv ==> eq ==> eq ==> iff) (reachable_via_sets pg).
+Proof.
+  unfold Proper, respectful; intros; subst.
+  apply reachable_via_sets_congr.
+  tauto.
+Qed.
+
+(** 再次回到_[I4]_的证明。*)
+
+Theorem DFS_reachable_via_unvisited {V E} (pg: PreGraph V E):
+  forall (u1 v: V),
+    Hoare (fun s => I4 pg v s u1)
+          (body_DFS pg v)
+          (fun res s =>
+             match res with
+             | by_continue w => I4 pg w s u1
+             | by_break _ => True
+             end).
+Proof.
+  intros.
+  unfold body_DFS, I4.
+  apply Hoare_choice.
+  + eapply Hoare_bind; [apply Hoare_any |].
+    intros w.
+    apply Hoare_test_bind.
+    apply Hoare_test_bind.
+    eapply Hoare_bind; [apply push_stack_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s'.
+    eapply Hoare_bind; [apply visit_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s''.
+    apply Hoare_ret'; intros.
+    destruct H as [? [? [? [? [? [? ?]]]]]].
+    rewrite unvisited_visited, H1, H3, Sets_complement_union,
+            <- unvisited_visited in H0.
+    Sets_unfold1 in H0.
+    destruct H0.
+    specialize (H6 H0).
+    destruct H6 as [u0 [? ?]].
+    pose proof reachable_via_unvisited pg u0 u1 w _ H8.
+    destruct H9.
+    - exists u0.
+      rewrite unvisited_visited, H1, H3, Sets_complement_union,
+              <- unvisited_visited.
+      rewrite H, H2.
+      simpl.
+      tauto.
+    - exists w.
+      rewrite unvisited_visited, H1, H3, Sets_complement_union,
+              <- unvisited_visited.
+      rewrite H, H2.
+      simpl.
+      tauto.
+  + apply Hoare_test_bind.
+    apply Hoare_choice.
+    - eapply Hoare_bind; [apply pop_stack_fact | intros w].
+      apply Hoare_pre_ex; intros s'.
+      apply Hoare_ret'.
+      intros.
+      destruct H as [? [? [? ?]]].
+      rewrite unvisited_visited, H1, <- unvisited_visited in H0.
+      specialize (H3 H0).
+      destruct H3 as [u0 [? ?]].
+      simpl in H3.
+      destruct H3.
+      * subst u0.
+      (** 需要补充_[w]_是visited *)
+Abort.
+
+(** 补充以下引理。*)
+
+Lemma step_fails_reachable_via_complement {V E: Type} (pg: PreGraph V E):
+  forall (u: V) (X: V -> Prop),
+    u ∈ X ->
+    (forall v, step pg u v -> v ∈ X) ->
+    (forall v, reachable_via_sets pg (Sets.complement X) u v ->
+               v ∈ Sets.complement X -> False).
+Proof.
+  intros.
+  induction_1n H1.
+  + tauto.
+  + clear IHrt.
+    destruct H3.
+    specialize (H0 _ H3).
+    tauto.
+Qed.
+
+(** 补充以下不变式：栈中节点都是visited节点。*)
+
+Definition I5 {V}: V -> state V -> Prop :=
+  fun v s => v ∈ s.(visited).
+
+Definition I6 {V}: state V -> Prop :=
+  fun s => forall w, In w s.(stack) -> w ∈ s.(visited).
+
+Theorem DFS_stack_visited {V E} (pg: PreGraph V E):
+  forall (u: V),
+    Hoare (fun s => I5 u s /\ I6 s)
+          (body_DFS pg u)
+          (fun res s =>
+             match res with
+             | by_continue v => I5 v s /\ I6 s
+             | by_break _ => True
+             end).
+Proof.
+  intros.
+  unfold body_DFS, I5, I6.
+  apply Hoare_choice.
+  + eapply Hoare_bind; [apply Hoare_any |].
+    intros w.
+    apply Hoare_test_bind.
+    apply Hoare_test_bind.
+    eapply Hoare_bind; [apply push_stack_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s'.
+    eapply Hoare_bind; [apply visit_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s''.
+    apply Hoare_ret'; intros.
+    destruct H as [? [? [? [? [? [? [? ?]]]]]]].
+    split.
+    - rewrite H0, H2.
+      Sets_unfold1.
+      right.
+      sets_unfold.
+      tauto.
+    - intros.
+      rewrite H0, H2.
+      rewrite H, H1 in H7.
+      simpl in H7; destruct H7.
+      * subst w0.
+        Sets_unfold1.
+        tauto.
+      * Sets_unfold1.
+        left.
+        apply H6; tauto.
+  + apply Hoare_test_bind.
+    apply Hoare_choice.
+    - eapply Hoare_bind; [apply pop_stack_fact | intros w].
+      apply Hoare_pre_ex; intros s'.
+      apply Hoare_ret'.
+      intros.
+      destruct H as [? [? [? [? ?]]]].
+      split.
+      * rewrite H0.
+        apply H3.
+        rewrite H; simpl; tauto.
+      * intros.
+        rewrite H0.
+        apply H3.
+        rewrite H.
+        simpl; tauto.
+    - apply Hoare_test_bind.
+      apply Hoare_ret'.
+      tauto.
+Qed.
+
+Theorem DFS_reachable_via_unvisited {V E} (pg: PreGraph V E):
+  forall (u1 v: V),
+    Hoare (fun s => I5 v s /\ I4 pg v s u1)
+          (body_DFS pg v)
+          (fun res s =>
+             match res with
+             | by_continue w => I4 pg w s u1
+             | by_break _ => True
+             end).
+Proof.
+  intros.
+  unfold body_DFS, I4, I5.
+  apply Hoare_choice.
+  + eapply Hoare_bind; [apply Hoare_any |].
+    intros w.
+    apply Hoare_test_bind.
+    apply Hoare_test_bind.
+    eapply Hoare_bind; [apply push_stack_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s'.
+    eapply Hoare_bind; [apply visit_fact | cbv beta; intros _].
+    apply Hoare_pre_ex; intros s''.
+    apply Hoare_ret'; intros.
+    destruct H as [? [? [? [? [? [? [? ?]]]]]]].
+    rewrite unvisited_visited, H1, H3, Sets_complement_union,
+            <- unvisited_visited in H0.
+    Sets_unfold1 in H0.
+    destruct H0.
+    specialize (H7 H0).
+    destruct H7 as [u0 [? ?]].
+    pose proof reachable_via_unvisited pg u0 u1 w _ H9.
+    destruct H10.
+    - exists u0.
+      rewrite unvisited_visited, H1, H3, Sets_complement_union,
+              <- unvisited_visited.
+      rewrite H, H2.
+      simpl.
+      tauto.
+    - exists w.
+      rewrite unvisited_visited, H1, H3, Sets_complement_union,
+              <- unvisited_visited.
+      rewrite H, H2.
+      simpl.
+      tauto.
+  + apply Hoare_test_bind.
+    apply Hoare_choice.
+    - eapply Hoare_bind; [apply pop_stack_fact | intros w].
+      apply Hoare_pre_ex; intros s'.
+      apply Hoare_ret'.
+      intros.
+      destruct H as [? [? [? [? ?]]]].
+      rewrite unvisited_visited, H1, <- unvisited_visited in H0.
+      specialize (H4 H0).
+      destruct H4 as [u0 [? ?]].
+      simpl in H4.
+      destruct H4.
+      * subst u0.
+        pose proof step_fails_reachable_via_complement pg _ _ H3 H2 _ H5.
+        tauto.
+      * exists u0.
+        rewrite <- H.
+        rewrite unvisited_visited, H1, <- unvisited_visited.
+        tauto.
     - apply Hoare_test_bind.
       apply Hoare_ret'.
       tauto.

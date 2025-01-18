@@ -283,6 +283,46 @@ Proof.
     * reflexivity.
 Qed.
 
+Definition reachable_via_sets {V E} (pg: PreGraph V E) (P: V -> Prop):
+  V -> V -> Prop :=
+  clos_refl_trans (fun x y => step pg x y /\ P y).
+
+(** 又需要补充_[reachable_via_sets]_的代数性质。*)
+
+#[export] Instance reachable_via_sets_mono {V E} (pg: PreGraph V E):
+  Proper (Sets.included ==> Sets.included) (reachable_via_sets pg).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  sets_unfold; intros u v ?.
+  induction_1n H0.
+  + reflexivity.
+  + destruct H1.
+    apply H in H2.
+    transitivity_1n u0.
+    - tauto.
+    - apply IHrt; tauto.
+Qed.
+
+#[export] Instance reachable_via_sets_congr {V E} (pg: PreGraph V E):
+  Proper (Sets.equiv ==> Sets.equiv) (reachable_via_sets pg).
+Proof.
+  unfold Proper, respectful.
+  intros.
+  apply Sets_equiv_Sets_included; split;
+    apply reachable_via_sets_mono.
+  + rewrite H; reflexivity.
+  + rewrite H; reflexivity.
+Qed.
+
+#[export] Instance reachable_via_sets_congr' {V E} (pg: PreGraph V E):
+  Proper (Sets.equiv ==> eq ==> eq ==> iff) (reachable_via_sets pg).
+Proof.
+  unfold Proper, respectful; intros; subst.
+  apply reachable_via_sets_congr.
+  tauto.
+Qed.
+
 Definition is_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop := 
     length el + 1 = length vl /\
     graph_connected (Build_PreGraph V E vl el pg.(src) pg.(dst) pg.(weight)).
@@ -296,6 +336,75 @@ Definition is_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: lis
 
 Definition is_minimal_spanning_tree {V E: Type} (pg: PreGraph V E) (vl: list V) (el: list E): Prop :=
   is_spanning_tree pg vl el /\ (forall vl' el', is_spanning_tree pg vl' el' -> (get_sum pg el <= get_sum pg el')%Z).
+
+  Definition reachable_via_lists {V E} (pg: PreGraph V E) (P: list V): V -> V -> Prop :=
+    clos_refl_trans (fun x y => step pg x y /\ In y P).
+  
+  Definition is_new_list_delete_one_from_original {A} (l: list A) (a: A): list A -> Prop :=
+    fun l' => forall x, In x l' <-> In x l /\ ~ x = a.
+  
+  Lemma deleted_list_exists {A} (l: list A) (a: A):
+    NoDup l -> In a l -> exists l', length l' + 1 = length l /\ NoDup l' 
+  /\ is_new_list_delete_one_from_original l a l' .
+  Proof.
+    intros.
+    apply in_split in H0.
+    destruct H0 as [l1 [l2 ?]].
+    exists (l1 ++ l2).
+    unfold is_new_list_delete_one_from_original.
+    intros.
+    split.
+    + intros.
+      apply in_app_or in H1.
+      destruct H1.
+      ++ split.
+          +++ rewrite H0.
+              apply in_or_app.
+              left; tauto.
+          +++ rewrite H0 in H.
+              apply NoDup_remove_2 in H.
+              destruct (classic (x = a)).
+              * subst.
+                assert (In a l1 \/ In a l2).
+                { tauto. }
+                apply in_or_app in H0.
+                tauto.
+              * tauto.
+      ++ split.
+          +++ rewrite H0.
+              apply in_or_app.
+              right. simpl. tauto.
+          +++ rewrite H0 in H.
+              apply NoDup_remove_2 in H.
+              destruct (classic (x = a)).
+              * subst.
+                assert (In a l1 \/ In a l2).
+                { tauto. }
+                apply in_or_app in H0.
+                tauto.
+              * tauto.
+    + intros.
+      destruct H1.
+      apply in_or_app.
+       rewrite H0 in H1.
+      apply in_app_or in H1.
+      destruct H1.
+      ++ tauto.
+      ++ simpl in H1.
+          destruct H1.
+          +++ subst.
+              tauto.
+          +++ subst.
+              tauto.
+  Qed.
+  
+Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
+  NoDup l -> In a l -> 
+  exists l', Z.add (get_sum pg l') (pg.(weight) a) = (get_sum pg l)
+  /\ length l' + 1 = length l /\ NoDup l' 
+  /\ is_new_list_delete_one_from_original l a l' .
+Proof.
+Admitted.
 
 Record State (V E: Type) := 
 {
@@ -669,6 +778,31 @@ split.
       simpl.
       tauto. 
 Qed.
+
+Theorem keep_chosen_graph_subgraph {V E: Type}:
+  forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V),
+  graph_connected pg -> 
+  set_of_the_edges_want_to_add pg σ1 e ->
+  set_of_the_vertices_want_to_add pg σ1 e v ->
+  σ2.(vertex_taken) = v :: σ1.(vertex_taken) ->
+  σ2.(edge_taken) = e :: σ1.(edge_taken) ->
+  subgraph {|
+    vertices := σ1.(vertex_taken);
+    edges := σ1.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |} pg ->
+  subgraph {|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |} pg.
+Proof.
+Admitted.
+
 
 
 (* Level 1 *)
@@ -1142,58 +1276,49 @@ Qed.
             先证明在v与u的在原先最小生成树的路径中，存在某一个边{x,y}，x还在已经选的树里，但y就不在了
             {x,y}的构造就选成这个。
             那么y->v（由构造）， v->u, u->x（已经选的是一棵树）。*)
+  
+Definition is_graph_after_delete {V E} (pg: PreGraph V E) (vl: list V) (el: list E) (e: E): list V -> list E -> Prop :=
+  fun vl' el' => is_new_list_delete_one_from_original el e el' /\ vl = vl'.
 
-Definition reachable_via_lists {V E} (pg: PreGraph V E) (P: list V): V -> V -> Prop :=
-  clos_refl_trans (fun x y => step pg x y /\ In y P).
-
-Definition is_new_list_delete_one_from_original {A} (l: list A) (a: A): list A -> Prop :=
-  fun l' => forall x, In x l' <-> In x l /\ ~ x = a.
-
-Lemma deleted_list_exists {A} (l: list A) (a: A):
-  NoDup l -> In a l -> exists l', is_new_list_delete_one_from_original l a l' .
+Lemma graph_after_delete_exists {V E: Type}:
+  forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E),
+    is_minimal_spanning_tree pg vl el ->
+    In e el ->
+    exists vl' el', is_graph_after_delete pg vl el e vl' el'.
 Proof.
   intros.
-  apply in_split in H0.
-  destruct H0 as [l1 [l2 ?]].
-  exists (l1 ++ l2).
-  unfold is_new_list_delete_one_from_original.
-  intros.
-  split.
-  + intros.
-    apply in_app_or in H1.
-    destruct H1.
-    ++ split.
-        +++ rewrite H0.
-            apply in_or_app.
-            left; tauto.
-        +++ rewrite H0 in H.
-            apply NoDup_remove_2 in H.
-Admitted.
-
-Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
-  NoDup l -> In a l -> 
-  exists l', Z.add (get_sum pg l') (pg.(weight) a) = (get_sum pg l)
-  /\ length l' + 1 = length l /\ NoDup l' 
-  /\ is_new_list_delete_one_from_original l a l' .
-Proof.
+  unfold is_graph_after_delete.
+  destruct H as [[[_ [[? [? ?]] _]] _] _].
+  pose proof (deleted_list_exists el e ).
 Admitted.
   
 
-Definition is_graph_after_delete {V E} (pg: PreGraph V E) (vl: list V) (el: list E) (e: E): list V -> list E -> Prop :=
-  fun vl' el' => is_new_list_delete_one_from_original el e el'.
-
-(* Theorem either_with_x_or_with_y {V E: Type}:
-  forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E) (x y k: V),
+Theorem either_with_x_or_with_y {V E: Type}:
+  forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E) (x y k: V) 
+  (vl': list V) (el': list E),
     graph_connected pg ->
     is_minimal_spanning_tree pg vl el ->
     In e el ->
+    is_graph_after_delete pg vl el e vl' el' ->
     pg.(vvalid) k ->
-    (x = pg.(src) e /\ y = pg.(dst) e) \/ (x = pg.(dst) e /\ y = pg.(src) e) -> *)
+    (x = pg.(src) e /\ y = pg.(dst) e) \/ (x = pg.(dst) e /\ y = pg.(src) e) ->
+    connected {|
+      vertices := vl';
+      edges := el';
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |} x k \/ connected {|
+      vertices := vl';
+      edges := el';
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |} y k.
+Proof.
+Admitted.
 
-    
-
-
-(* Theorem intermediate_point_between_x_and_y {V E: Type}:
+Theorem intermediate_point_between_x_and_y {V E: Type}:
   forall (pg: PreGraph V E) (s: State V E) (e: E) (v: V) (vl: list V) (el: list E),
     graph_connected pg ->
     set_of_the_vertices_want_to_add pg s e v ->
@@ -1202,12 +1327,22 @@ Definition is_graph_after_delete {V E} (pg: PreGraph V E) (vl: list V) (el: list
     is_minimal_spanning_tree pg vl el ->
     list_to_set s.(vertex_taken) ⊆ list_to_set vl ->
     list_to_set s.(edge_taken) ⊆ list_to_set el ->
-    (exists f x y, ).
+    (exists f x, 
+    (x = pg.(src) f \/ x = pg.(dst) f) /\
+    In f el /\ ~ In f s.(edge_taken) /\
+    In x s.(vertex_taken) /\
+    reachable_via_sets {|
+      vertices := vl;
+      edges := el;
+      src := pg.(src);
+      dst := pg.(dst);
+      weight := pg.(weight)
+    |} (Sets.complement (list_to_set s.(vertex_taken))) x v /\
+    ( forall vl' el', is_graph_after_delete pg vl el f vl' el' ->
+      is_minimal_spanning_tree pg vl' (e :: el'))
+    ).
 Proof.
-  
-Qed. *)
-
-
+Admitted.
 
 Theorem Hoare_add_the_edge_and_the_vertex_for_ismst {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
@@ -1220,25 +1355,96 @@ Theorem Hoare_add_the_edge_and_the_vertex_for_ismst {V E: Type}:
   (exists (vl : list V) (el : list E),
       is_minimal_spanning_tree pg vl el /\
       list_to_set s.(vertex_taken) ⊆ list_to_set vl /\
-      list_to_set s.(edge_taken) ⊆ list_to_set el))
+      list_to_set s.(edge_taken) ⊆ list_to_set el) /\
+  subgraph {|
+    vertices := s.(vertex_taken);
+    edges := s.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |} pg)
   (add_the_edge_and_the_vertex pg e v)
   (fun _ s => exists (vl' : list V) (el' : list E),
   is_minimal_spanning_tree pg vl' el' /\
   list_to_set s.(vertex_taken) ⊆ list_to_set vl' /\
-   list_to_set s.(edge_taken) ⊆ list_to_set el').
+   list_to_set s.(edge_taken) ⊆ list_to_set el' /\ 
+  subgraph {|
+    vertices := s.(vertex_taken);
+    edges := s.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+   |} pg).
 Proof.
   intros.
   unfold Hoare, add_the_edge_and_the_vertex.
   intros; clear a.
-  destruct H0 as [H2 [H3 [H4 [vl [el [H5 [H6 H7]]]]]]].
+  destruct H0 as [H2 [H3 [H4 [[vl [el [H5 [H6 H7]]]] L]]]].
   destruct H1 as [H0 H1].
-Admitted.
-
+  pose proof (intermediate_point_between_x_and_y pg σ1 e v vl el H H2 H3 H4 H5 H6 H7).
+  destruct H8 as [f [x [? [? [? [? [? ?]]]]]]].
+  pose proof (graph_after_delete_exists pg vl el f H5 H9).
+  destruct
+  H14 as [vl' [el' ?]].
+  specialize (H13 vl' el' H14).
+  exists vl', (e :: el').
+  destruct H5.
+  unfold is_spanning_tree in H5.
+  destruct H5.
+  assert (subgraph {|
+    vertices := σ2.(vertex_taken);
+    edges := σ2.(edge_taken);
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |} pg).
+  { apply (keep_chosen_graph_subgraph pg σ1 σ2 e v H H3 H2 H0 H1 L).
+  }
+  split; [ tauto | split].
+  + unfold is_graph_after_delete in H14.
+    unfold is_new_list_delete_one_from_original in H14.
+    unfold is_minimal_spanning_tree in H5.
+    destruct H14.
+    subst vl'.
+    rewrite H0, H16.
+    unfold list_to_set.
+    sets_unfold.
+    intros.
+    destruct H18; [subst a | ].
+    * unfold is_legal_graph in H17.
+      destruct H17 as [_ [_ H17]].
+      destruct H3 as [[? ?] _].
+      destruct H as [[_ [_ H]] _].
+      specialize (H e H3).
+      destruct H2.
+      destruct H2.
+      subst v.
+      tauto.
+      destruct H2.
+      subst v.
+      tauto.
+    * destruct L as [_ [_ _]].
+      sets_unfold in subgraph_vvalid0.
+      specialize (subgraph_vvalid0 a H18);tauto.
+  + split; [ | tauto].
+    unfold list_to_set.
+    sets_unfold.
+    intros e0 ?.
+    rewrite H1 in H18.
+    destruct H18; [subst; simpl; tauto | simpl; right].
+    unfold is_graph_after_delete in H14.
+    unfold is_new_list_delete_one_from_original in H14.
+    destruct H14 as [H14 _].
+    apply (H14 e0).
+    split.
+    ** unfold list_to_set in H7; sets_unfold in H7.
+      apply (H7 e0 H18).
+    ** destruct (classic (e0 = f)); [ subst; tauto | tauto].
+Qed.
 
 (* Level 3 *)
 Theorem keep_I1 {V E: Type} (s1 s2: State V E):
-  forall (u: V) (pg: PreGraph V E),
-        pg.(vvalid) u -> 
+  forall (pg: PreGraph V E),
         graph_connected pg -> 
         Hoare (fun s => I1 pg s /\ subgraph {|
           vertices := s.(vertex_taken);
@@ -1264,7 +1470,6 @@ Theorem keep_I1 {V E: Type} (s1 s2: State V E):
               weight := pg.(weight) |} pg
             end).
 Proof.
-Proof.
   intros.
   unfold I1.
   apply Hoare_choice.
@@ -1281,7 +1486,15 @@ Proof.
       ++ apply (Hoare_get_any_vertex_in_vertex_candidates pg e _).
       ++ intros v.
           eapply Hoare_bind; [ | intros; apply Hoare_ret'].
-Admitted.
+          +++ apply (Hoare_add_the_edge_and_the_vertex_for_ismst pg e v).
+              tauto.
+          +++ intros.
+              simpl in H0.
+              destruct H0 as [vl [el ?]].
+              split; [ | tauto].
+              exists vl, el.
+              tauto.
+Qed.
 
 (* Level 3 *)
 Theorem break_with_I1 {V E: Type}:
