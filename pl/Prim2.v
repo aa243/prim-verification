@@ -343,20 +343,6 @@ Definition reachable_via_lists {V E} (pg: PreGraph V E) (P: list V): V -> V -> P
 Definition is_new_list_delete_one_from_original {A} (l: list A) (a: A): list A -> Prop :=
   fun l' => forall x, In x l' <-> In x l /\ ~ x = a.
 
-Lemma deleted_list_exists {A} (l: list A) (a: A):
-  NoDup l -> In a l -> exists l', length l' + 1 = length l /\ NoDup l' 
-/\ is_new_list_delete_one_from_original l a l' .
-Proof.
-Admitted.
-  
-Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
-  NoDup l -> In a l -> 
-  exists l', Z.add (get_sum pg l') (pg.(weight) a) = (get_sum pg l)
-  /\ length l' + 1 = length l /\ NoDup l' 
-  /\ is_new_list_delete_one_from_original l a l' .
-Proof.
-Admitted.
-
 Lemma list_to_set_cons_add {A} (l1 l2: list A) (a: A):
   list_to_set l1 ⊆ list_to_set l2 ->
   In a l2 ->
@@ -439,7 +425,6 @@ Definition body_prim {V E: Type} (pg: PreGraph V E):
 Definition prim {V E: Type} (pg: PreGraph V E): unit -> StateRelMonad.M (State V E) unit :=
   fun _ => repeat_break (body_prim pg) tt.
 
-(* 不变量 *)
 (* 永远有一棵最小生成树包含以选的 *)
 Definition I1 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   exists vl el, is_minimal_spanning_tree pg vl el 
@@ -453,12 +438,9 @@ Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
 Definition I3 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   list_to_set s.(vertex_taken) == pg.(vvalid).
 
-Definition I4 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
-  
+(* 要求三需要用到的不变量 *)
+(* Definition I4 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop := *)
 
-
-(* Lemma Nodup_empty_list:
-  NoDup []%list. *)
 
 (* Level 1 *)
 (* 初始状态满足 I2 *)
@@ -762,6 +744,8 @@ split.
       tauto. 
 Qed.
 
+(* Level 1 *)
+(* 选择的图总是原图的子图 *)
 Theorem keep_chosen_graph_subgraph {V E: Type}:
   forall (pg: PreGraph V E) (σ1 σ2: State V E) (e: E) (v: V),
   graph_connected pg -> 
@@ -784,10 +768,93 @@ Theorem keep_chosen_graph_subgraph {V E: Type}:
     weight := pg.(weight)
   |} pg.
 Proof.
-Admitted.
-
-
-
+  intros.
+  split.
+  + pose proof keep_chosen_graph_legal pg σ1 σ2 e v.
+    destruct H4.
+    pose proof H5 H H0 H1 H2 H3 subgraph_legal0.
+    tauto.
+  + destruct H.
+    tauto.
+  + destruct H4.
+    clear biggraph_legal0 subgraph_legal0 subgraph_evalid0.
+    clear subgraph_dst0 subgraph_src0.
+    rewrite H2.
+    sets_unfold.
+    intros.
+    unfold vvalid in H4.
+    simpl in H4.
+    sets_unfold in subgraph_vvalid0.
+    specialize (subgraph_vvalid0 a).
+    unfold vvalid in subgraph_vvalid0.
+    simpl in subgraph_vvalid0.
+    unfold vvalid.
+    destruct H4.
+    - unfold set_of_the_edges_want_to_add in H0.
+      destruct H0.
+      clear H5.
+      unfold set_of_adjacent_edge_to_taken in H0.
+      destruct H0.
+      clear H5.
+      unfold graph_connected in H.
+      destruct H.
+      clear H5.
+      unfold is_legal_graph in H.
+      destruct H as [? [? ?]].
+      clear H H5.
+      specialize (H6 e).
+      pose proof H6 H0.
+      clear H6.
+      destruct H.
+      unfold set_of_the_vertices_want_to_add in H1.
+      unfold vvalid in H,H5.
+      rewrite <- H4.
+      destruct H1.
+      ++ destruct H1.
+         rewrite H1 in H.
+         tauto.
+      ++ destruct H1.
+         rewrite H1 in H5.
+         tauto.
+    - pose proof subgraph_vvalid0 H4.
+      tauto.
+  + rewrite H2.
+    rewrite H3.
+    sets_unfold.
+    intros.
+    unfold evalid.
+    unfold evalid in H5.
+    simpl in H5.
+    unfold set_of_the_edges_want_to_add in H0.
+    destruct H0.
+    clear H6.
+    unfold set_of_adjacent_edge_to_taken in H0.
+    destruct H0.
+    clear H6.
+    unfold evalid in H0.
+    destruct H5;[rewrite <- H5;tauto|].
+    destruct H4.
+    clear subgraph_legal0 subgraph_vvalid0 subgraph_dst0 subgraph_src0.
+    sets_unfold in subgraph_evalid0.
+    specialize (subgraph_evalid0 a).
+    unfold evalid in subgraph_evalid0.
+    simpl in subgraph_evalid0.
+    pose proof subgraph_evalid0 H5. auto.
+  + rewrite H2.
+    rewrite H3.
+    sets_unfold.
+    unfold evalid.
+    intros.
+    simpl.
+    reflexivity.
+  + rewrite H2.
+    rewrite H3.
+    sets_unfold.
+    intros.
+    unfold src.
+    reflexivity.
+Qed. 
+    
 (* Level 1 *)
 (* 每一步新加的v与选出来的点用选的边连通 *)
 Lemma vertices_candidate_is_connected {V E: Type}:
@@ -1083,7 +1150,7 @@ Proof.
 Qed.
 
 (* Level 1 *)
-(* 若上一步的状态满足I2，则经过一步 primbody 之后的状态仍然满足I2 *)
+(* 若上一步的状态满足是一棵树，则经过一步 primbody 之后的状态仍然满足是一棵树 *)
 Lemma keep_I2 {V E: Type} (pg: PreGraph V E):
     graph_connected pg -> 
     Hoare (fun s => I2 pg s) 
@@ -1118,7 +1185,7 @@ Proof.
 Qed.
 
 (* Level 1 *)
-(* 如果初始状态满足I2，那么prim得到的结果也满足I2 *)
+(* 如果初始状态是一棵树，那么prim得到的结果也是一棵树 *)
 Theorem prim_find_tree_if_break_f {V E: Type}:
   forall (pg: PreGraph V E),
   graph_connected pg -> 
@@ -1139,8 +1206,8 @@ Proof.
 Qed.
 
 (* Level 2 *)
-(* 如果初始状态满足I2，那么执行 prim_body 后的状态若 continue 则满足I2，
-   若 break 则满足I3 *)
+(* 如果初始状态满足是一棵树，那么执行 prim_body 后的状态若 continue 则仍是一棵树，
+   若 break 则满足加入了所有点 *)
 Lemma break_with_I3 {V E: Type} (pg: PreGraph V E):
   forall (pg: PreGraph V E),
   graph_connected pg ->
@@ -1175,7 +1242,7 @@ Proof.
 Qed.
 
 (* Level 2 *)
-(* 如果初始状态满足I2，那么prim得到的结果满足I3 *)
+(* 如果初始状态满足是一棵树，那么prim得到的结果满足找到了所有点 *)
 Theorem prim_find_all_vertices_if_break_f {V E: Type}:
   forall (pg: PreGraph V E),
   graph_connected pg -> 
@@ -1196,7 +1263,7 @@ Proof.
 Qed.
 
 (* Level 2 *)
-(* 如果初始状态满足I2，那么prim得到的结果是原图的生成树 *)
+(* 如果初始状态满足是一棵树，那么prim得到的结果是原图的生成树 *)
 Theorem prim_find_spanning_tree_if_break_f {V E: Type}:
   forall (pg: PreGraph V E),
     graph_connected pg -> 
@@ -1247,6 +1314,8 @@ Proof.
   tauto.
 Qed.
 
+(* Level 2 Finished! *)
+
 (* 设{u,v}是新选的边，u在已选的里，v不在。 如果{u,v}在原来的最小生成树中，什么也不用干
 如果不在，那么要修改这个最小生成树，要加上{u,v}，删掉一条边。
 先来陈述找到这条要删的边的算法。 *)
@@ -1263,6 +1332,7 @@ Qed.
 Definition is_graph_after_delete {V E} (pg: PreGraph V E) (vl: list V) (el: list E) (e: E): list V -> list E -> Prop :=
   fun vl' el' => is_new_list_delete_one_from_original el e el' /\ vl = vl'.
 
+(* Level 3 *)
 Lemma graph_after_delete_exists {V E: Type}:
   forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E),
     is_minimal_spanning_tree pg vl el ->
@@ -1272,10 +1342,10 @@ Proof.
   intros.
   unfold is_graph_after_delete.
   destruct H as [[[_ [[? [? ?]] _]] _] _].
-  pose proof (deleted_list_exists el e ).
 Admitted.
   
-
+(* Level 3 *)
+(* 这里coq似乎有时会卡住 *)
 Theorem either_with_x_or_with_y {V E: Type}:
   forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E) (k: V) 
   (vl': list V) (el': list E),
@@ -1323,7 +1393,9 @@ Proof.
   remember (pg.(dst) e) as y.
   remember (pg.(src) e) as x.
   induction_1n H6.
+Admitted.
 
+(* Level 3 *)
 Theorem intermediate_point_between_x_and_y {V E: Type}:
   forall (pg: PreGraph V E) (s: State V E) (e: E) (v: V) (vl: list V) (el: list E),
     graph_connected pg ->
@@ -1362,11 +1434,9 @@ Proof.
   destruct H0.
   destruct H1 as [[? ?] ?].
   destruct H12; [ tauto | ].
-  
+Admitted.
  
-
-
-
+(* Level 3 *)
 Theorem Hoare_add_the_edge_and_the_vertex_for_ismst {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
   graph_connected pg ->
@@ -1684,9 +1754,128 @@ Proof.
       sets_unfold; tauto.
   + split.
     - rewrite H1, H2.
-      unfold length.
-Admitted.
+      unfold is_legal_graph.
+      split; [ | split; [ | split]].
+      ++ simpl.
+         apply NoDup_cons; [ | apply NoDup_nil].
+         unfold In.
+         tauto.
+      ++ simpl. apply NoDup_nil.
+      ++ unfold vvalid.
+         simpl.
+         left.
+         unfold evalid in H3.
+         simpl in H3.
+         tauto.
+      ++ unfold vvalid.
+         simpl.
+         left.
+         unfold evalid in H3.
+         simpl in H3.
+         tauto.
+    - unfold graph_connected in H0.
+      destruct H0. tauto.
+    - rewrite H1,H2.
+      sets_unfold.
+      intros.
+      unfold vvalid in H3.
+      unfold vvalid.
+      simpl in H3.
+      unfold vvalid in H.
+      destruct H3;[rewrite H3 in H; tauto | tauto].
+    - rewrite H1,H2.
+      sets_unfold.
+      intros.
+      unfold evalid in H3.
+      unfold evalid.
+      simpl in H3.
+      tauto.
+    - intros.
+      simpl.
+      reflexivity.
+    - intros.
+      simpl.
+      reflexivity.
+Qed.
 (* ******************************************************************************* *)
+
+(* Level 3 *)
+(* 不重复的列表可以删除一个元素得到一个新的列表 *)
+Lemma deleted_list_exists {A} (l: list A) (a: A):
+  NoDup l -> In a l -> exists l', length l' + 1 = length l /\ NoDup l' 
+/\ is_new_list_delete_one_from_original l a l' .
+Proof.
+intros.
+apply in_split in H0.
+destruct H0 as [l1 [l2 ?]].
+exists (l1 ++ l2).
+unfold is_new_list_delete_one_from_original.
+intros.
+split.
+*** rewrite H0.
+  rewrite (app_length l1 l2).
+  rewrite app_length.
+  simpl.
+  lia.
+*** split.
+** rewrite H0 in H.
+  apply NoDup_remove_1 in H.
+  tauto.
+** intros.
+  split.
++ intros.
+  apply in_app_or in H1.
+  destruct H1.
+  ++ split.
+      +++ rewrite H0.
+          apply in_or_app.
+          left; tauto.
+      +++ rewrite H0 in H.
+          apply NoDup_remove_2 in H.
+          destruct (classic (x = a)).
+          * subst.
+            assert (In a l1 \/ In a l2).
+            { tauto. }
+            apply in_or_app in H0.
+            tauto.
+          * tauto.
+  ++ split.
+      +++ rewrite H0.
+          apply in_or_app.
+          right. simpl. tauto.
+      +++ rewrite H0 in H.
+          apply NoDup_remove_2 in H.
+          destruct (classic (x = a)).
+          * subst.
+            assert (In a l1 \/ In a l2).
+            { tauto. }
+            apply in_or_app in H0.
+            tauto.
+          * tauto.
++ intros.
+  destruct H1.
+  apply in_or_app.
+    rewrite H0 in H1.
+  apply in_app_or in H1.
+  destruct H1.
+  ++ tauto.
+  ++ simpl in H1.
+      destruct H1.
+      +++ subst.
+          tauto.
+      +++ subst.
+          tauto.
+Qed.
+
+(* Level 3 *)
+(* 列表删掉一个元素后，剩余部分的边的长度和满足与原列表边权和差删掉边的长度 *)
+Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a: E):
+  NoDup l -> In a l -> 
+  exists l', Z.add (get_sum pg l') (pg.(weight) a) = (get_sum pg l)
+  /\ length l' + 1 = length l /\ NoDup l' 
+  /\ is_new_list_delete_one_from_original l a l' .
+Proof.
+Admitted.
 
 (* Level 3 *)
 Lemma no_dup_list_have_same_length_if_set_equal {V : Type}:
@@ -1799,6 +1988,7 @@ induction l1.
   lia.
 Qed.
 
+(* Level 3 *)
 Lemma no_dup_set_equal_if_length_equal_and_set_include {V: Type}:
   forall (l1 l2: list V),
     length l1 = length l2 -> 
@@ -1932,7 +2122,7 @@ Proof.
           tauto.
   Qed.
 
-
+(* Level 3 *)
 Lemma get_sum_1n {V E: Type}:
   forall (pg: PreGraph V E) (l: list E) (e: E),
     get_sum pg (e :: l) = Z.add (get_sum pg l) (pg.(weight) e).
@@ -1957,6 +2147,7 @@ Proof.
   lia.
 Qed.
 
+(* Level 3 *)
 Lemma no_dup_list_have_same_sum_if_set_equal {V E: Type}:
   forall (pg: PreGraph V E) (l1 l2: list E),
     NoDup l1 -> NoDup l2 -> 
@@ -2133,7 +2324,7 @@ Proof.
     tauto.
 Qed.
 
-
+(* Level 3 *)
 Theorem prim_functional_correctness_foundation {V E: Type}: 
     forall (u: V) (pg: PreGraph V E),
         pg.(vvalid) u ->
@@ -2187,7 +2378,7 @@ Proof.
   tauto.
 Qed.
 
-
+(* Level 3 *)
 Theorem prim_functional_correctness {V E: Type}:
     forall (u: V) (pg: PreGraph V E),
       pg.(vvalid) u ->
