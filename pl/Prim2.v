@@ -418,6 +418,34 @@ Lemma deleted_list_exists_with_sum_equal {V E} (pg: PreGraph V E) (l: list E) (a
 Proof.
 Admitted.
 
+Lemma list_to_set_cons_add {A} (l1 l2: list A) (a: A):
+  list_to_set l1 ⊆ list_to_set l2 ->
+  In a l2 ->
+  list_to_set (a :: l1) ⊆ list_to_set l2.
+Proof.
+  unfold list_to_set.
+  intros.
+  sets_unfold.
+  simpl.
+  intros.
+  sets_unfold in H.
+  destruct H1.
+  + subst.
+    tauto.
+  + apply H.
+    tauto.
+Qed.
+
+Lemma list_to_set_cons_include {A} (l: list A) (a: A):
+  list_to_set l ⊆ list_to_set (a :: l) .
+Proof.
+  unfold list_to_set.
+  sets_unfold.
+  simpl.
+  tauto.
+Qed.
+
+
 Record State (V E: Type) := 
 {
   vertex_taken: list V;
@@ -485,6 +513,10 @@ Definition I2 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
 (* 选了所有点 *)
 Definition I3 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
   list_to_set s.(vertex_taken) == pg.(vvalid).
+
+Definition I4 {V E: Type} (pg: PreGraph V E) (s: State V E): Prop :=
+  
+
 
 (* Lemma Nodup_empty_list:
   NoDup []%list. *)
@@ -1306,29 +1338,52 @@ Admitted.
   
 
 Theorem either_with_x_or_with_y {V E: Type}:
-  forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E) (x y k: V) 
+  forall (pg: PreGraph V E) (vl: list V) (el: list E) (e: E) (k: V) 
   (vl': list V) (el': list E),
     graph_connected pg ->
     is_minimal_spanning_tree pg vl el ->
     In e el ->
     is_graph_after_delete pg vl el e vl' el' ->
     pg.(vvalid) k ->
-    (x = pg.(src) e /\ y = pg.(dst) e) \/ (x = pg.(dst) e /\ y = pg.(src) e) ->
     connected {|
       vertices := vl';
       edges := el';
       src := pg.(src);
       dst := pg.(dst);
       weight := pg.(weight)
-    |} x k \/ connected {|
+    |} (pg.(src) e) k \/ connected {|
       vertices := vl';
       edges := el';
       src := pg.(src);
       dst := pg.(dst);
       weight := pg.(weight)
-    |} y k.
+    |} (pg.(dst) e) k.
 Proof.
-Admitted.
+  intros.
+  destruct (classic (connected
+  {|
+    vertices := vl';
+    edges := el';
+    src := pg.(src);
+    dst := pg.(dst);
+    weight := pg.(weight)
+  |} (pg.(src) e) k)); [tauto | right ].
+  destruct H0 as [[[H0 [? ?]] ?] _].
+  sets_unfold in H7.
+  pose proof (H7 k).
+  destruct H8.
+  specialize (H9 H3).
+  unfold list_to_set in H9.
+  destruct H5 as [_ [_ H5]].
+  specialize (H5 e H1).
+  destruct H5.
+  specialize (H6 (pg.(dst) e) k H10 H9).
+  destruct H2 as [? H2].
+  subst vl'.
+  unfold is_new_list_delete_one_from_original in H11.
+  remember (pg.(dst) e) as y.
+  remember (pg.(src) e) as x.
+  induction_1n H6.
 
 Theorem intermediate_point_between_x_and_y {V E: Type}:
   forall (pg: PreGraph V E) (s: State V E) (e: E) (v: V) (vl: list V) (el: list E),
@@ -1339,6 +1394,7 @@ Theorem intermediate_point_between_x_and_y {V E: Type}:
     is_minimal_spanning_tree pg vl el ->
     list_to_set s.(vertex_taken) ⊆ list_to_set vl ->
     list_to_set s.(edge_taken) ⊆ list_to_set el ->
+    ~ In e el ->
     (exists f x, 
     (x = pg.(src) f \/ x = pg.(dst) f) /\
     In f el /\ ~ In f s.(edge_taken) /\
@@ -1354,7 +1410,23 @@ Theorem intermediate_point_between_x_and_y {V E: Type}:
       is_minimal_spanning_tree pg vl' (e :: el'))
     ).
 Proof.
-Admitted.
+  intros.
+  destruct H0.
+  unfold list_to_set in H4; sets_unfold in H4.
+  unfold list_to_set in H5; sets_unfold in H5.
+  unfold is_minimal_spanning_tree in H3.
+  destruct H3.
+  destruct H3.
+  destruct H3.
+  destruct H9.
+  +   
+  destruct H0.
+  destruct H1 as [[? ?] ?].
+  destruct H12; [ tauto | ].
+  
+ 
+
+
 
 Theorem Hoare_add_the_edge_and_the_vertex_for_ismst {V E: Type}:
   forall (pg: PreGraph V E) (e: E) (v: V),
@@ -1393,12 +1465,50 @@ Proof.
   intros; clear a.
   destruct H0 as [H2 [H3 [H4 [[vl [el [H5 [H6 H7]]]] L]]]].
   destruct H1 as [H0 H1].
+  destruct (classic (In e el)).
+  - exists vl, el.
+    split; [ tauto | ].
+    split; [ rewrite H0; apply (list_to_set_cons_add); [ tauto | ] | ].
+    --  destruct H5.
+        unfold is_spanning_tree in H5.
+        destruct H5.
+        assert (subgraph {|
+          vertices := σ2.(vertex_taken);
+          edges := σ2.(edge_taken);
+          src := pg.(src);
+          dst := pg.(dst);
+          weight := pg.(weight)
+        |} pg).
+        { apply (keep_chosen_graph_subgraph pg σ1 σ2 e v H H3 H2 H0 H1 L).
+        }
+        destruct H11 as [_ _ ? _ _ _].
+        assert (In v σ2.(vertex_taken)).
+        { rewrite H0. simpl. tauto. }
+        sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 v H11).
+        sets_unfold in H10.
+        unfold list_to_set in H10.
+        specialize (H10 v).
+        tauto.
+    --  assert (subgraph {|
+        vertices := σ2.(vertex_taken);
+        edges := σ2.(edge_taken);
+        src := pg.(src);
+        dst := pg.(dst);
+        weight := pg.(weight)
+        |} pg).
+        { apply (keep_chosen_graph_subgraph pg σ1 σ2 e v H H3 H2 H0 H1 L).
+        }
+        split; [ | tauto ].
+        rewrite H1.
+        apply list_to_set_cons_add; [ tauto | tauto ].
+  -
   pose proof (intermediate_point_between_x_and_y pg σ1 e v vl el H H2 H3 H4 H5 H6 H7).
-  destruct H8 as [f [x [? [? [? [? [? ?]]]]]]].
-  pose proof (graph_after_delete_exists pg vl el f H5 H9).
+  destruct H9 as [f [x [? [? [? [? [? ?]]]]]]]; [tauto | ].
+  pose proof (graph_after_delete_exists pg vl el f H5 H10).
   destruct
-  H14 as [vl' [el' ?]].
-  specialize (H13 vl' el' H14).
+  H15 as [vl' [el' ?]].
+  specialize (H14 vl' el' H15).
   exists vl', (e :: el').
   destruct H5.
   unfold is_spanning_tree in H5.
@@ -1412,45 +1522,37 @@ Proof.
   |} pg).
   { apply (keep_chosen_graph_subgraph pg σ1 σ2 e v H H3 H2 H0 H1 L).
   }
-  split; [ tauto | split].
-  + unfold is_graph_after_delete in H14.
-    unfold is_new_list_delete_one_from_original in H14.
+  split; [ tauto | split]. 
+  + unfold is_graph_after_delete in H15.
+    unfold is_new_list_delete_one_from_original in H15.
     unfold is_minimal_spanning_tree in H5.
-    destruct H14.
+    destruct H15.
     subst vl'.
-    rewrite H0, H16.
-    unfold list_to_set.
-    sets_unfold.
-    intros.
-    destruct H18; [subst a | ].
-    * unfold is_legal_graph in H17.
-      destruct H17 as [_ [_ H17]].
-      destruct H3 as [[? ?] _].
-      destruct H as [[_ [_ H]] _].
-      specialize (H e H3).
-      destruct H2.
-      destruct H2.
-      subst v.
-      tauto.
-      destruct H2.
-      subst v.
-      tauto.
-    * destruct L as [_ [_ _]].
-      sets_unfold in subgraph_vvalid0.
-      specialize (subgraph_vvalid0 a H18);tauto.
+    rewrite H0; apply (list_to_set_cons_add); [ tauto | ].
+    destruct H18 as [_ _ ? _ _ _].
+        assert (In v σ2.(vertex_taken)).
+        { rewrite H0. simpl. tauto. }
+        sets_unfold in subgraph_vvalid0.
+        specialize (subgraph_vvalid0 v H18).
+        sets_unfold in H17.
+        unfold list_to_set in H17.
+        specialize (H17 v).
+        tauto.
   + split; [ | tauto].
+    rewrite H1.
+    apply list_to_set_cons_add; [  | simpl; tauto ].
     unfold list_to_set.
     sets_unfold.
     intros e0 ?.
-    rewrite H1 in H18.
-    destruct H18; [subst; simpl; tauto | simpl; right].
-    unfold is_graph_after_delete in H14.
-    unfold is_new_list_delete_one_from_original in H14.
-    destruct H14 as [H14 _].
-    apply (H14 e0).
+    unfold is_graph_after_delete in H15.
+    unfold is_new_list_delete_one_from_original in H15.
+    destruct H15 as [H15 _].
+    specialize (H15 e0).
+    simpl; right.
+    apply (H15).
     split.
     ** unfold list_to_set in H7; sets_unfold in H7.
-      apply (H7 e0 H18).
+      apply (H7 e0 H19).
     ** destruct (classic (e0 = f)); [ subst; tauto | tauto].
 Qed.
 
@@ -1625,110 +1727,110 @@ Lemma no_dup_list_have_same_length_if_set_equal {V : Type}:
     NoDup l1 -> NoDup l2 -> 
     list_to_set l1 == list_to_set l2 -> 
     length l1 = length l2.
-    Proof.
-    intros l1.
-    induction l1.
-    + intros.
-      unfold list_to_set in H1.
-      assert (H_eq: forall v', In v' [] <-> In v' l2).
-      {
-        intros.
-        specialize (H1 v'). 
-        assumption.
-      }
-      destruct l2.
-      - reflexivity.
-      - exfalso. specialize (H_eq v). simpl in H_eq. tauto.
-    +
+  Proof.
+  intros l1.
+  induction l1.
+  + intros.
+    unfold list_to_set in H1.
+    assert (H_eq: forall v', In v' [] <-> In v' l2).
+    {
       intros.
-      assert (NoDup l1).
+      specialize (H1 v'). 
+      assumption.
+    }
+    destruct l2.
+    - reflexivity.
+    - exfalso. specialize (H_eq v). simpl in H_eq. tauto.
+  +
+    intros.
+    assert (NoDup l1).
+    {
+      inversion H; tauto.
+    }
+    assert (In a l2).
+    {
+      unfold list_to_set in H1.
+      sets_unfold in H1. 
+      pose proof (H1 a).
+      destruct H3.
+      assert (In a (a :: l1)).
       {
-        inversion H; tauto.
+        simpl; tauto.
       }
-      assert (In a l2).
-      {
-        unfold list_to_set in H1.
-        sets_unfold in H1. 
-        pose proof (H1 a).
-        destruct H3.
-        assert (In a (a :: l1)).
-        {
-          simpl; tauto.
-        }
-        pose proof (H3 H5).
-        tauto.
-      }
-      pose proof (deleted_list_exists l2 a H0 H3).
-      destruct H4 as [l2' ?].
-      unfold is_new_list_delete_one_from_original in H4.
-      destruct H4.
-      destruct H5.
-      rewrite <- H4.
-      assert (length l1 = length l2').
-      {
-        pose proof (IHl1 l2' H2 H5).
-        assert (list_to_set l1 == list_to_set l2').
-        {
-          split; intros.
-          +  pose proof H6 a0.
-             destruct H9.
-             assert (list_to_set l2 a0).
-             {
-                unfold list_to_set in H1.
-                sets_unfold in H1.
-                pose proof (H1 a0).
-                unfold list_to_set in H8.
-                destruct H11.
-                assert (In a0 (a :: l1)).
-                {
-                  simpl; tauto.
-                }
-                pose proof (H11 H13).
-                tauto.
-             }
-             unfold list_to_set in H11.
-             assert (a0 <> a).
-             {
-                unfold list_to_set in H8.
-                unfold list_to_set in H1.
-                sets_unfold in H1.
-                assert (~ In a l1).
-                {
-                  inversion H; tauto.
-                }
-                destruct (classic (a0 = a)).
-                + rewrite <- H13 in H12.
-                  tauto.
-                + tauto.
-             }
-             assert (In a0 l2 /\ a0 <> a).
-             {
-                tauto.
-             }
-             pose proof (H10 H13).
-             tauto.
-          + pose proof H6 a0.
-            destruct H9.
-            unfold list_to_set in H8.
-            pose proof (H9 H8).
-            destruct H11.
-            unfold list_to_set in H1.
-            sets_unfold in H1.
-            pose proof (H1 a0).
-            destruct H13.
-            pose proof (H14 H11).
-            simpl in H15.
-            destruct H15.
-            ++ subst; tauto.
-            ++ tauto.
-        }
-      pose proof (H7 H8).  
+      pose proof (H3 H5).
       tauto.
+    }
+    pose proof (deleted_list_exists l2 a H0 H3).
+    destruct H4 as [l2' ?].
+    unfold is_new_list_delete_one_from_original in H4.
+    destruct H4.
+    destruct H5.
+    rewrite <- H4.
+    assert (length l1 = length l2').
+    {
+      pose proof (IHl1 l2' H2 H5).
+      assert (list_to_set l1 == list_to_set l2').
+      {
+        split; intros.
+        +  pose proof H6 a0.
+            destruct H9.
+            assert (list_to_set l2 a0).
+            {
+              unfold list_to_set in H1.
+              sets_unfold in H1.
+              pose proof (H1 a0).
+              unfold list_to_set in H8.
+              destruct H11.
+              assert (In a0 (a :: l1)).
+              {
+                simpl; tauto.
+              }
+              pose proof (H11 H13).
+              tauto.
+            }
+            unfold list_to_set in H11.
+            assert (a0 <> a).
+            {
+              unfold list_to_set in H8.
+              unfold list_to_set in H1.
+              sets_unfold in H1.
+              assert (~ In a l1).
+              {
+                inversion H; tauto.
+              }
+              destruct (classic (a0 = a)).
+              + rewrite <- H13 in H12.
+                tauto.
+              + tauto.
+            }
+            assert (In a0 l2 /\ a0 <> a).
+            {
+              tauto.
+            }
+            pose proof (H10 H13).
+            tauto.
+        + pose proof H6 a0.
+          destruct H9.
+          unfold list_to_set in H8.
+          pose proof (H9 H8).
+          destruct H11.
+          unfold list_to_set in H1.
+          sets_unfold in H1.
+          pose proof (H1 a0).
+          destruct H13.
+          pose proof (H14 H11).
+          simpl in H15.
+          destruct H15.
+          ++ subst; tauto.
+          ++ tauto.
       }
-      rewrite <- H7.
-      simpl.
-      lia.
-  Qed.
+    pose proof (H7 H8).  
+    tauto.
+    }
+    rewrite <- H7.
+    simpl.
+    lia.
+Qed.
 
 Lemma no_dup_set_equal_if_length_equal_and_set_include {V: Type}:
   forall (l1 l2: list V),
